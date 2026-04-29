@@ -24,6 +24,7 @@ from .forms_cadastro import (
     OrganizacaoMilitarForm,
     PostoForm,
     QuadrinhoForm,
+    TipoEscalaForm,
     TipoIndisponibilidadeForm,
 )
 from .models import (
@@ -314,6 +315,74 @@ def tipo_indisponibilidade_excluir(request, tipo_id):
         request,
         'cadastro/tipo_indisponibilidade_confirm_delete.html',
         {'tipo': tipo},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tipos de Escala (cadastro global, não escopado por OM)
+# ---------------------------------------------------------------------------
+
+@login_required
+def tipo_escala_listar(request):
+    tipos = (
+        TipoEscala.objects.all()
+        .annotate(
+            qtd_escalas=Count('escalas', distinct=True),
+            qtd_quadrinhos=Count('quadrinhos', distinct=True),
+        )
+        .order_by('-ativo', 'nome')
+    )
+    return render(
+        request,
+        'cadastro/tipo_escala_list.html',
+        {'tipos': tipos},
+    )
+
+
+@login_required
+def tipo_escala_form(request, tipo_id=None):
+    instancia = get_object_or_404(TipoEscala, pk=tipo_id) if tipo_id else None
+    if request.method == 'POST':
+        form = TipoEscalaForm(request.POST, instance=instancia)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Tipo de escala salvo com sucesso.')
+            return redirect('tipo_escala_listar')
+    else:
+        form = TipoEscalaForm(instance=instancia)
+    return render(
+        request,
+        'cadastro/tipo_escala_form.html',
+        {'form': form, 'tipo': instancia},
+    )
+
+
+@login_required
+def tipo_escala_excluir(request, tipo_id):
+    tipo = get_object_or_404(TipoEscala, pk=tipo_id)
+    tem_vinculos = tipo.escalas.exists() or tipo.quadrinhos.exists()
+    if request.method == 'POST':
+        if tem_vinculos:
+            tipo.ativo = False
+            tipo.save()
+            messages.success(
+                request,
+                'Tipo de escala desativado (existem escalas ou quadrinhos '
+                'vinculados, histórico preservado).',
+            )
+        else:
+            tipo.delete()
+            messages.success(request, 'Tipo de escala excluído.')
+        return redirect('tipo_escala_listar')
+    return render(
+        request,
+        'cadastro/tipo_escala_confirm_delete.html',
+        {
+            'tipo': tipo,
+            'qtd_escalas': tipo.escalas.count(),
+            'qtd_quadrinhos': tipo.quadrinhos.count(),
+            'tem_vinculos': tem_vinculos,
+        },
     )
 
 

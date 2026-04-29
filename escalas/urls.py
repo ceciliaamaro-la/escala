@@ -36,6 +36,28 @@ urlpatterns = [
         name='especialidade_excluir',
     ),
 
+    # Tipos de Escala
+    path(
+        'tipos-escala/',
+        views.tipo_escala_listar,
+        name='tipo_escala_listar',
+    ),
+    path(
+        'tipos-escala/novo/',
+        views.tipo_escala_form,
+        name='tipo_escala_novo',
+    ),
+    path(
+        'tipos-escala/<int:tipo_id>/editar/',
+        views.tipo_escala_form,
+        name='tipo_escala_editar',
+    ),
+    path(
+        'tipos-escala/<int:tipo_id>/excluir/',
+        views.tipo_escala_excluir,
+        name='tipo_escala_excluir',
+    ),
+
     # Tipos de Indisponibilidade
     path(
         'tipos-indisponibilidade/',

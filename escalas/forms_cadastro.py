@@ -11,6 +11,7 @@ from .models import (
     OrganizacaoMilitar,
     Posto,
     Quadrinho,
+    TipoEscala,
     TipoIndisponibilidade,
 )
 
@@ -84,6 +85,34 @@ class TipoIndisponibilidadeForm(BootstrapFormMixin, forms.ModelForm):
         widgets = {
             'descricao': forms.Textarea(attrs={'rows': 3}),
         }
+
+
+# ---------------------------------------------------------------------------
+# Tipo de Escala
+# ---------------------------------------------------------------------------
+
+class TipoEscalaForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = TipoEscala
+        fields = ['nome', 'descricao', 'ativo']
+        widgets = {
+            'descricao': forms.Textarea(attrs={'rows': 3}),
+        }
+        help_texts = {
+            'nome': 'Ex.: Permanência, Sobreaviso, Serviço Administrativo, Voo Operacional.',
+            'descricao': 'Explicação resumida do que envolve este tipo de escala.',
+        }
+
+    def clean_nome(self):
+        nome = (self.cleaned_data.get('nome') or '').strip()
+        if not nome:
+            raise ValidationError('Informe o nome do tipo de escala.')
+        qs = TipoEscala.objects.filter(nome__iexact=nome)
+        if self.instance.pk:
+            qs = qs.exclude(pk=self.instance.pk)
+        if qs.exists():
+            raise ValidationError('Já existe um tipo de escala com esse nome.')
+        return nome
 
 
 # ---------------------------------------------------------------------------
