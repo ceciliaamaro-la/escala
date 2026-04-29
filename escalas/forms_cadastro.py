@@ -44,7 +44,7 @@ class OrganizacaoMilitarForm(BootstrapFormMixin, forms.ModelForm):
         model = OrganizacaoMilitar
         fields = [
             'nome', 'sigla', 'tipo', 'comandante',
-            'endereco', 'telefone', 'email',
+            'endereco', 'telefone', 'email', 'logo',
         ]
 
 

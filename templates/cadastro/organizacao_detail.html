@@ -36,8 +36,18 @@
         {% endif %}
     </div>
     <div class="p-4">
-        <div class="row g-3">
-            <div class="col-md-7">
+        <div class="row g-3 align-items-start">
+            <div class="col-md-3 text-center">
+                <div class="om-logo-preview">
+                    {% if om.logo %}
+                        <img src="{{ om.logo.url }}" alt="Logo {{ om.sigla }}">
+                    {% else %}
+                        <span class="crest" style="width:120px;height:120px;font-size:3rem;">★</span>
+                    {% endif %}
+                </div>
+                <div class="form-text small mt-2">Brasão da OM</div>
+            </div>
+            <div class="col-md-5">
                 <div class="form-label">Nome completo</div>
                 <h4 class="mb-3" style="color:var(--m-azul-fab);">{{ om.nome }}</h4>
 
@@ -54,7 +64,7 @@
                 </a></p>
                 {% endif %}
             </div>
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <div class="form-label">Sigla</div>
                 <p><span class="badge-posto">{{ om.sigla }}</span></p>
 

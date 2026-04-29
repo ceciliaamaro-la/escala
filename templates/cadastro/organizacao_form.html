@@ -11,11 +11,26 @@
 <div class="card-mil">
     <div class="card-mil-header">Dados da OM</div>
     <div class="p-4">
-        <form method="post" novalidate>
+        <form method="post" enctype="multipart/form-data" novalidate>
             {% csrf_token %}
             <div class="row">
                 <div class="col-md-8">
                     {% include 'cadastro/_form_layout.html' with form=form %}
+                </div>
+                <div class="col-md-4">
+                    <div class="form-label">Pré-visualização do brasão</div>
+                    <div class="om-logo-preview">
+                        {% if om and om.logo %}
+                            <img src="{{ om.logo.url }}" alt="Logo {{ om.sigla }}">
+                        {% else %}
+                            <span class="crest" style="width:96px;height:96px;font-size:2.4rem;">★</span>
+                        {% endif %}
+                    </div>
+                    <div class="form-text small mt-2">
+                        Envie um PNG ou JPG (recomendado quadrado, fundo
+                        transparente). Substitui a estrela amarela na navbar
+                        quando esta OM estiver ativa.
+                    </div>
                 </div>
             </div>
             <hr>

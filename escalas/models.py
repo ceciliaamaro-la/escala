@@ -182,7 +182,14 @@ class OrganizacaoMilitar(models.Model):
         blank=True,
         help_text="Nome do comandante atual"
     )
-    
+
+    logo = models.ImageField(
+        upload_to='oms/logos/',
+        blank=True,
+        null=True,
+        help_text="Brasão/distintivo da OM (substitui a estrela amarela na navbar)"
+    )
+
     ativo = models.BooleanField(
         default=True,
         help_text="Soft delete"

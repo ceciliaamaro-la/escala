@@ -28,6 +28,7 @@ Aplicação Django 6.0 para gestão de escalas militares da **FAB (Força Aérea
 - `escalas/context_processors.py` — `om_context` injeta `om_ativa` e `oms_disponiveis` em todos os templates
 - `static/css/militar.css` — tema visual FAB (azul #003a78, amarelo #ffd200)
 - `db.sqlite3` — SQLite versionado
+- `media/oms/logos/` — uploads dos brasões/logos das OMs (servido em `/media/` no DEBUG; ignorado pelo git)
 
 ## Rotas
 

@@ -110,7 +110,7 @@ def organizacao_detalhe(request, om_id=None):
 def organizacao_form(request, om_id=None):
     instancia = get_object_or_404(OrganizacaoMilitar, pk=om_id) if om_id else None
     if request.method == 'POST':
-        form = OrganizacaoMilitarForm(request.POST, instance=instancia)
+        form = OrganizacaoMilitarForm(request.POST, request.FILES, instance=instancia)
         if form.is_valid():
             om = form.save()
             # se for a primeira, ativa na sessão

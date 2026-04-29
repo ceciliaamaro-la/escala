@@ -11,3 +11,4 @@ env/
 .uv/
 *.log
 .DS_Store
+media/

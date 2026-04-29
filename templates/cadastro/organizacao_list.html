@@ -17,6 +17,7 @@
     <table class="table table-mil mb-0">
         <thead>
             <tr>
+                <th style="width:64px;">Brasão</th>
                 <th style="width:120px;">Sigla</th>
                 <th>Nome</th>
                 <th style="width:120px;">Tipo</th>
@@ -30,6 +31,15 @@
         <tbody>
             {% for om in oms %}
             <tr>
+                <td>
+                    <span class="crest crest-sm {% if not om.logo %}crest-fallback{% endif %}">
+                        {% if om.logo %}
+                            <img src="{{ om.logo.url }}" alt="Logo {{ om.sigla }}">
+                        {% else %}
+                            ★
+                        {% endif %}
+                    </span>
+                </td>
                 <td>
                     <span class="badge-posto">{{ om.sigla }}</span>
                     {% if om_ativa and om_ativa.id == om.id %}
@@ -68,7 +78,7 @@
                 </td>
             </tr>
             {% empty %}
-            <tr><td colspan="8" class="text-center text-muted py-4">
+            <tr><td colspan="9" class="text-center text-muted py-4">
                 Nenhuma OM cadastrada.
                 <a href="{% url 'organizacao_novo' %}">Cadastrar primeira OM</a>.
             </td></tr>
