@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block titulo %}Divisões{% endblock %}
+{% block conteudo %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1><i class="bi bi-diagram-3"></i> Divisões</h1>
+        <div class="subtitle">Agrupamentos internos da OM</div>
+    </div>
+    <a href="{% url 'divisao_novo' %}" class="btn btn-mil-dourado">
+        <i class="bi bi-plus-lg"></i> Nova divisão
+    </a>
+</div>
+<div class="card-mil">
+    <table class="table table-mil mb-0">
+        <thead>
+            <tr>
+                <th style="width:100px;">Sigla</th>
+                <th>Nome</th>
+                <th>Chefe</th>
+                <th style="width:120px;">Efetivo</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:160px;" class="text-end">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for d in divisoes %}
+            <tr>
+                <td><span class="badge-posto">{{ d.sigla }}</span></td>
+                <td><strong>{{ d.nome }}</strong></td>
+                <td>{{ d.chefe|default:"—" }}</td>
+                <td><span class="badge-mil">{{ d.total_militares }}</span></td>
+                <td>
+                    {% if d.ativo %}<span class="badge-mil">Ativa</span>
+                    {% else %}<span class="badge-mil badge-inativo">Inativa</span>{% endif %}
+                </td>
+                <td class="text-end">
+                    <a href="{% url 'divisao_editar' d.id %}" class="btn btn-sm btn-mil-outline">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    {% if d.ativo %}
+                    <a href="{% url 'divisao_excluir' d.id %}" class="btn btn-sm btn-mil-danger">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="text-center text-muted py-4">
+                Nenhuma divisão cadastrada.
+                <a href="{% url 'divisao_novo' %}">Cadastrar agora</a>.
+            </td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

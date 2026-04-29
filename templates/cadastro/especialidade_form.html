@@ -1,0 +1,26 @@
+{% extends 'base.html' %}
+{% block titulo %}{% if especialidade %}Editar{% else %}Nova{% endif %} Especialidade{% endblock %}
+{% block conteudo %}
+<div class="page-header">
+    <h1><i class="bi bi-award"></i> {% if especialidade %}Editar{% else %}Nova{% endif %} Especialidade</h1>
+    <div class="subtitle">Habilitação funcional do militar</div>
+</div>
+<div class="card-mil">
+    <div class="card-mil-header">Dados da Especialidade</div>
+    <div class="p-4">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="row"><div class="col-md-7">{% include 'cadastro/_form_layout.html' with form=form %}</div></div>
+            <hr>
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'especialidade_listar' %}" class="btn btn-mil-outline">
+                    <i class="bi bi-arrow-left"></i> Cancelar
+                </a>
+                <button type="submit" class="btn btn-mil-dourado">
+                    <i class="bi bi-check2"></i> Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

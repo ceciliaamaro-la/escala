@@ -1,0 +1,46 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Organização Militar{% endblock %}
+
+{% block conteudo %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1><i class="bi bi-building"></i> Organização Militar</h1>
+        <div class="subtitle">Dados institucionais da OM</div>
+    </div>
+    <a href="{% url 'organizacao_editar' %}" class="btn btn-mil">
+        <i class="bi bi-pencil"></i> Editar
+    </a>
+</div>
+
+<div class="card-mil">
+    <div class="card-mil-header">{{ om.sigla }} &middot; {{ om.get_tipo_display }}</div>
+    <div class="p-4">
+        <div class="row g-3">
+            <div class="col-md-7">
+                <div class="form-label">Nome completo</div>
+                <h4 class="mb-3" style="color:var(--m-verde-escuro);">{{ om.nome }}</h4>
+
+                <div class="form-label">Comandante</div>
+                <p>{{ om.comandante|default:"—" }}</p>
+
+                <div class="form-label">Endereço</div>
+                <p>{{ om.endereco|default:"—" }}</p>
+            </div>
+            <div class="col-md-5">
+                <div class="form-label">Sigla</div>
+                <p><span class="badge-posto">{{ om.sigla }}</span></p>
+
+                <div class="form-label">Telefone</div>
+                <p>{{ om.telefone|default:"—" }}</p>
+
+                <div class="form-label">E-mail</div>
+                <p>{{ om.email|default:"—" }}</p>
+
+                <div class="form-label">Cadastrada em</div>
+                <p>{{ om.data_criacao|date:"d/m/Y H:i" }}</p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,332 @@
+:root {
+    --m-verde-escuro: #2c3e2d;
+    --m-verde-medio: #4a5d3a;
+    --m-verde-claro: #6b7c4f;
+    --m-areia: #c9b88e;
+    --m-areia-clara: #e8dfc4;
+    --m-preto: #1a1a1a;
+    --m-cinza: #3d3d3d;
+    --m-vermelho: #8b1a1a;
+    --m-vermelho-vivo: #c0392b;
+    --m-roxo: #5b3a5b;
+    --m-dourado: #b8860b;
+    --m-fundo: #f4f1e8;
+    --m-borda: #d4c89a;
+}
+
+body {
+    background-color: var(--m-fundo);
+    background-image:
+        repeating-linear-gradient(
+            45deg,
+            transparent 0,
+            transparent 2px,
+            rgba(74, 93, 58, 0.02) 2px,
+            rgba(74, 93, 58, 0.02) 4px
+        );
+    color: var(--m-preto);
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+
+h1, h2, h3, h4, h5, h6,
+.brand-title {
+    font-family: 'Trajan Pro', 'Cinzel', 'Times New Roman', Georgia, serif;
+    letter-spacing: 0.04em;
+}
+
+/* Topbar / navbar */
+.navbar-mil {
+    background: linear-gradient(180deg, var(--m-verde-escuro) 0%, #233322 100%);
+    border-bottom: 3px solid var(--m-dourado);
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+}
+.navbar-mil .navbar-brand {
+    color: var(--m-areia-clara);
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.navbar-mil .navbar-brand:hover {
+    color: #fff;
+}
+.navbar-mil .nav-link {
+    color: var(--m-areia) !important;
+    text-transform: uppercase;
+    font-size: 0.82rem;
+    letter-spacing: 0.06em;
+    padding: 0.5rem 0.9rem !important;
+    border-bottom: 2px solid transparent;
+}
+.navbar-mil .nav-link:hover,
+.navbar-mil .nav-link.active {
+    color: #fff !important;
+    border-bottom-color: var(--m-dourado);
+}
+.navbar-mil .navbar-toggler {
+    border-color: var(--m-areia);
+}
+.user-chip {
+    background: rgba(0,0,0,0.25);
+    color: var(--m-areia-clara);
+    padding: 0.3rem 0.7rem;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    border: 1px solid rgba(184, 134, 11, 0.4);
+}
+
+/* Page header */
+.page-header {
+    background: linear-gradient(180deg, #fff 0%, var(--m-areia-clara) 100%);
+    border: 1px solid var(--m-borda);
+    border-left: 4px solid var(--m-verde-escuro);
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1.5rem;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+.page-header h1 {
+    margin: 0;
+    color: var(--m-verde-escuro);
+    font-size: 1.6rem;
+    text-transform: uppercase;
+}
+.page-header .subtitle {
+    color: var(--m-cinza);
+    margin-top: 0.25rem;
+    font-size: 0.9rem;
+}
+
+/* Cards */
+.card-mil {
+    background: #fff;
+    border: 1px solid var(--m-borda);
+    border-radius: 4px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+}
+.card-mil > .card-header,
+.card-mil > .card-mil-header {
+    background: var(--m-verde-escuro);
+    color: var(--m-areia-clara);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-size: 0.82rem;
+    padding: 0.6rem 1rem;
+    border-bottom: 2px solid var(--m-dourado);
+    font-weight: 600;
+}
+
+/* Stat cards */
+.stat-card {
+    background: #fff;
+    border: 1px solid var(--m-borda);
+    border-top: 3px solid var(--m-verde-escuro);
+    border-radius: 4px;
+    padding: 1.1rem 1.3rem;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+    height: 100%;
+}
+.stat-card .label {
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    color: var(--m-cinza);
+    letter-spacing: 0.08em;
+    margin-bottom: 0.3rem;
+}
+.stat-card .value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--m-verde-escuro);
+    font-family: 'Courier New', monospace;
+}
+.stat-card .hint {
+    color: #777;
+    font-size: 0.8rem;
+    margin-top: 0.2rem;
+}
+.stat-card.dourado { border-top-color: var(--m-dourado); }
+.stat-card.dourado .value { color: var(--m-dourado); }
+.stat-card.vermelho { border-top-color: var(--m-vermelho); }
+.stat-card.vermelho .value { color: var(--m-vermelho); }
+.stat-card.roxo { border-top-color: var(--m-roxo); }
+.stat-card.roxo .value { color: var(--m-roxo); }
+
+/* Tables */
+.table-mil {
+    background: #fff;
+    border: 1px solid var(--m-borda);
+}
+.table-mil thead {
+    background: var(--m-verde-escuro);
+    color: var(--m-areia-clara);
+}
+.table-mil thead th {
+    text-transform: uppercase;
+    font-size: 0.78rem;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+    border-bottom: 2px solid var(--m-dourado);
+    padding: 0.65rem 0.85rem;
+}
+.table-mil tbody tr:hover {
+    background: var(--m-areia-clara);
+}
+.table-mil td {
+    vertical-align: middle;
+    padding: 0.6rem 0.85rem;
+}
+
+/* Buttons */
+.btn-mil {
+    background: var(--m-verde-escuro);
+    color: var(--m-areia-clara);
+    border: 1px solid var(--m-verde-escuro);
+    text-transform: uppercase;
+    font-size: 0.82rem;
+    letter-spacing: 0.05em;
+    padding: 0.45rem 1rem;
+    border-radius: 3px;
+}
+.btn-mil:hover {
+    background: var(--m-verde-medio);
+    color: #fff;
+    border-color: var(--m-verde-medio);
+}
+.btn-mil-dourado {
+    background: var(--m-dourado);
+    color: #fff;
+    border-color: var(--m-dourado);
+}
+.btn-mil-dourado:hover {
+    background: #9c7209;
+    color: #fff;
+    border-color: #9c7209;
+}
+.btn-mil-outline {
+    background: #fff;
+    color: var(--m-verde-escuro);
+    border: 1px solid var(--m-verde-escuro);
+}
+.btn-mil-outline:hover {
+    background: var(--m-verde-escuro);
+    color: var(--m-areia-clara);
+}
+.btn-mil-danger {
+    background: var(--m-vermelho);
+    color: #fff;
+    border-color: var(--m-vermelho);
+}
+.btn-mil-danger:hover {
+    background: var(--m-vermelho-vivo);
+    color: #fff;
+    border-color: var(--m-vermelho-vivo);
+}
+
+/* Forms */
+.form-control, .form-select {
+    border-color: var(--m-borda);
+    border-radius: 3px;
+}
+.form-control:focus, .form-select:focus {
+    border-color: var(--m-verde-medio);
+    box-shadow: 0 0 0 0.2rem rgba(74, 93, 58, 0.15);
+}
+.form-label {
+    font-weight: 600;
+    color: var(--m-verde-escuro);
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+/* Badges */
+.badge-mil {
+    background: var(--m-verde-escuro);
+    color: var(--m-areia-clara);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-weight: 600;
+    font-size: 0.7rem;
+    padding: 0.3em 0.55em;
+    border-radius: 3px;
+}
+.badge-posto {
+    background: var(--m-dourado);
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    font-size: 0.78rem;
+    padding: 0.25em 0.55em;
+    border-radius: 3px;
+    font-weight: 700;
+}
+.badge-inativo {
+    background: #999;
+    color: #fff;
+}
+
+/* Login */
+.login-card {
+    max-width: 420px;
+    margin: 6vh auto;
+    background: #fff;
+    border: 1px solid var(--m-borda);
+    border-top: 4px solid var(--m-dourado);
+    border-radius: 4px;
+    padding: 2.5rem 2rem;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+}
+.login-card h1 {
+    color: var(--m-verde-escuro);
+    text-align: center;
+    font-size: 1.4rem;
+    margin-bottom: 0.2rem;
+}
+.login-card .sub {
+    text-align: center;
+    color: var(--m-cinza);
+    font-size: 0.85rem;
+    margin-bottom: 1.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+/* Footer */
+.footer-mil {
+    background: var(--m-verde-escuro);
+    color: var(--m-areia);
+    padding: 1rem 0;
+    margin-top: 3rem;
+    border-top: 3px solid var(--m-dourado);
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* Empty state */
+.empty-state {
+    background: #fff;
+    border: 1px dashed var(--m-borda);
+    text-align: center;
+    padding: 2.5rem 1rem;
+    color: var(--m-cinza);
+    border-radius: 4px;
+}
+.empty-state .icon {
+    font-size: 2.5rem;
+    color: var(--m-verde-claro);
+    margin-bottom: 0.6rem;
+}
+
+/* Crest / brand */
+.crest {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 30% 30%, var(--m-dourado), #6e5a09);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 800;
+    font-family: serif;
+    border: 2px solid var(--m-areia);
+}

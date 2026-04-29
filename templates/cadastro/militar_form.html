@@ -1,0 +1,88 @@
+{% extends 'base.html' %}
+{% block titulo %}{% if militar %}Editar{% else %}Novo{% endif %} Militar{% endblock %}
+{% block conteudo %}
+<div class="page-header">
+    <h1><i class="bi bi-person-badge"></i> {% if militar %}Editar{% else %}Cadastrar{% endif %} Militar</h1>
+    <div class="subtitle">Identificação completa do militar</div>
+</div>
+<div class="card-mil">
+    <div class="card-mil-header">Dados do Militar</div>
+    <div class="p-4">
+        <form method="post" novalidate>
+            {% csrf_token %}
+            <div class="row g-3">
+                <div class="col-md-6">
+                    <h6 class="text-uppercase text-muted small mb-3"><i class="bi bi-person"></i> Identificação</h6>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.nome_completo.id_for_label }}">{{ form.nome_completo.label }} <span class="text-danger">*</span></label>
+                        {{ form.nome_completo }}
+                        {% for e in form.nome_completo.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.nome_guerra.id_for_label }}">{{ form.nome_guerra.label }} <span class="text-danger">*</span></label>
+                        {{ form.nome_guerra }}
+                        {% for e in form.nome_guerra.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.matricula.id_for_label }}">{{ form.matricula.label }} <span class="text-danger">*</span></label>
+                            {{ form.matricula }}
+                            {% for e in form.matricula.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.cpf.id_for_label }}">{{ form.cpf.label }} <span class="text-danger">*</span></label>
+                            {{ form.cpf }}
+                            {% for e in form.cpf.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.data_nascimento.id_for_label }}">{{ form.data_nascimento.label }} <span class="text-danger">*</span></label>
+                        {{ form.data_nascimento }}
+                        {% for e in form.data_nascimento.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <h6 class="text-uppercase text-muted small mb-3"><i class="bi bi-shield"></i> Hierarquia e lotação</h6>
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.posto.id_for_label }}">{{ form.posto.label }} <span class="text-danger">*</span></label>
+                            {{ form.posto }}
+                            {% for e in form.posto.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label" for="{{ form.especialidade.id_for_label }}">{{ form.especialidade.label }}</label>
+                            {{ form.especialidade }}
+                            {% for e in form.especialidade.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.divisao.id_for_label }}">{{ form.divisao.label }}</label>
+                        {{ form.divisao }}
+                        {% for e in form.divisao.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="form-check mt-3">
+                        {{ form.ativo }}
+                        <label class="form-check-label" for="{{ form.ativo.id_for_label }}">{{ form.ativo.label }}</label>
+                    </div>
+                </div>
+            </div>
+
+            {% if form.non_field_errors %}
+                <div class="alert alert-danger small mt-3">
+                    {% for e in form.non_field_errors %}{{ e }}<br>{% endfor %}
+                </div>
+            {% endif %}
+
+            <hr>
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'militar_listar' %}" class="btn btn-mil-outline">
+                    <i class="bi bi-arrow-left"></i> Cancelar
+                </a>
+                <button type="submit" class="btn btn-mil-dourado">
+                    <i class="bi bi-check2"></i> Salvar
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

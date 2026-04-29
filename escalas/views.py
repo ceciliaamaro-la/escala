@@ -1,535 +1,386 @@
 """
-Sistema de Escala Militar - Django Views
-CRUD e lógica de negócio principal
+Views do Sistema de Escala Militar.
+Foco atual: dashboard, autenticação e cadastros (OM, Divisões, Postos,
+Especialidades, Militares). As views de geração de escala estão em
+`views_escala_legado.py` e serão integradas em uma próxima etapa.
 """
+from datetime import date
 
-from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib import messages
-from django.views.generic import ListView, DetailView, CreateView, UpdateView, DeleteView
-from django.urls import reverse_lazy
-from django.db.models import Count, Q, F, Prefetch
-from django.utils import timezone
-from datetime import datetime, timedelta
-from calendar import monthrange
+from django.contrib.auth.decorators import login_required
+from django.db.models import Count, Q
+from django.http import Http404
+from django.shortcuts import get_object_or_404, redirect, render
 
+from .forms_cadastro import (
+    DivisaoForm,
+    EspecialidadeForm,
+    MilitarForm,
+    OrganizacaoMilitarForm,
+    PostoForm,
+)
 from .models import (
-    Escala, EscalaItem, Militar, Quadrinho, TipoEscala, TipoServico,
-    OrganizacaoMilitar, CalendarioDia, Indisponibilidade, UsuarioCustomizado
+    Divisao,
+    Especialidade,
+    Militar,
+    OrganizacaoMilitar,
+    Posto,
 )
-from .forms import (
-    EscalaForm, EscalaItemForm, IndisponibilidadeForm,
-    GeracaoAutomaticaEscalaForm, PublicarEscalaForm
-)
 
 
-# ============================================================================
-# UTILITIES - FUNÇÕES AUXILIARES
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Helpers — assumem operação com uma única OM (configurável depois)
+# ---------------------------------------------------------------------------
 
-def usuario_pode_acessar_om(usuario, om):
-    """Verifica se usuário tem acesso à OM"""
-    if usuario.pode_administrar():
-        return usuario.om_principal_id == om.id
-    elif usuario.eh_militar and usuario.militar_associado:
-        return usuario.militar_associado.organizacao_militar_id == om.id
-    return False
+def obter_om_ativa():
+    """Retorna a OM ativa do sistema (modo single-OM).
 
-
-def usuario_pode_editar_escala(usuario, escala):
-    """Verifica se usuário pode editar uma escala"""
-    if not usuario_pode_acessar_om(usuario, escala.organizacao_militar):
-        return False
-    
-    if escala.status == 'publicada':
-        # Apenas admin_om pode editar publicadas
-        return usuario.pode_administrar()
-    
-    return usuario.pode_escalar() or usuario.pode_administrar()
-
-
-def obter_dias_disponiveis_mes(om, mes, ano):
-    """Retorna todos os CalendarioDia do mês para uma OM"""
-    primeiro_dia = datetime(ano, mes, 1).date()
-    ultimo_dia = datetime(
-        ano, mes, monthrange(ano, mes)[1]
-    ).date()
-    
-    return CalendarioDia.objects.filter(
-        organizacao_militar=om,
-        data__gte=primeiro_dia,
-        data__lte=ultimo_dia
-    ).order_by('data')
-
-
-def gerar_escala_automaticamente(escala):
+    Hoje o sistema é usado por uma única OM. Esse helper centraliza a busca
+    e devolve a primeira OM ativa cadastrada, ou ``None`` se ainda não houver
+    nenhuma. Mantemos o schema multi-OM intacto para evolução futura.
     """
-    Algoritmo de geração automática de escala.
-    Usa Quadrinho para balancear distribuição de serviços.
-    """
-    from django.db import transaction
-    
-    om = escala.organizacao_militar
-    
-    # Obter todos os dias do mês
-    dias = obter_dias_disponiveis_mes(om, escala.mes, escala.ano)
-    
-    if not dias.exists():
-        raise ValueError(f"Nenhum dia cadastrado para {escala.mes}/{escala.ano}")
-    
-    # Obter militares ativos da OM
-    militares_ativos = Militar.objects.filter(
-        organizacao_militar=om,
-        ativo=True
-    ).select_related('posto', 'especialidade')
-    
-    if not militares_ativos.exists():
-        raise ValueError(f"Nenhum militar ativo em {om.sigla}")
-    
-    alocacoes_criadas = 0
-    
-    with transaction.atomic():
-        for dia in dias:
-            # Buscar quadrinho para este tipo de escala/serviço
-            ranking = Quadrinho.obter_ranking(
-                tipo_escala=escala.tipo_escala,
-                tipo_servico=dia.tipo_servico,
-                ano=escala.ano,
-                om=om
-            )
-            
-            # Tentar alocar o próximo militar (com menor contagem)
-            alocado = False
-            
-            for quadrinho in ranking:
-                militar = quadrinho.militar
-                
-                # Verificar se está disponível
-                tem_indisponibilidade = militar.indisponibilidades.filter(
-                    data_inicio__lte=dia.data,
-                    data_fim__gte=dia.data,
-                    tipo__exclui_do_sorteio=True
-                ).exists()
-                
-                if not tem_indisponibilidade:
-                    # Criar alocação
-                    EscalaItem.objects.create(
-                        escala=escala,
-                        militar=militar,
-                        calendario_dia=dia,
-                        observacao="Gerado automaticamente"
-                    )
-                    alocado = True
-                    alocacoes_criadas += 1
-                    break
-            
-            if not alocado:
-                # Nenhum militar disponível neste dia
-                print(f"⚠️  Nenhum militar disponível em {dia.data}")
-    
-    return alocacoes_criadas
+    return OrganizacaoMilitar.objects.filter(ativo=True).order_by('id').first()
 
 
-# ============================================================================
-# VIEWS DE ESCALA
-# ============================================================================
-
-@login_required
-def listar_escalas(request):
-    """Lista todas as escalas acessíveis ao usuário"""
-    
-    # Filtrar por OMs do usuário
-    if request.user.pode_administrar():
-        oms = OrganizacaoMilitar.objects.filter(
-            id=request.user.om_principal_id,
-            ativo=True
-        )
-    elif request.user.eh_militar and request.user.militar_associado:
-        oms = OrganizacaoMilitar.objects.filter(
-            id=request.user.militar_associado.organizacao_militar_id,
-            ativo=True
-        )
-    else:
-        oms = OrganizacaoMilitar.objects.none()
-    
-    escalas = Escala.objects.filter(
-        organizacao_militar__in=oms
-    ).select_related(
-        'organizacao_militar', 'tipo_escala', 'usuario_criacao'
-    ).order_by('-ano', '-mes')
-    
-    # Filtros opcionais
-    filtro_om = request.GET.get('om')
-    filtro_tipo = request.GET.get('tipo')
-    filtro_status = request.GET.get('status')
-    filtro_ano = request.GET.get('ano')
-    
-    if filtro_om:
-        escalas = escalas.filter(organizacao_militar_id=filtro_om)
-    
-    if filtro_tipo:
-        escalas = escalas.filter(tipo_escala_id=filtro_tipo)
-    
-    if filtro_status:
-        escalas = escalas.filter(status=filtro_status)
-    
-    if filtro_ano:
-        escalas = escalas.filter(ano=filtro_ano)
-    
-    context = {
-        'escalas': escalas,
-        'oms': oms,
-        'tipos_escala': TipoEscala.objects.filter(ativo=True),
-        'anos': range(2020, timezone.now().year + 2),
-    }
-    
-    return render(request, 'escala/listar.html', context)
-
-
-@login_required
-def detalhar_escala(request, escala_id):
-    """Visualiza detalhes de uma escala"""
-    
-    escala = get_object_or_404(Escala, id=escala_id)
-    
-    # Verificar permissão
-    if not usuario_pode_acessar_om(request.user, escala.organizacao_militar):
-        messages.error(request, "Você não tem acesso a esta escala.")
-        return redirect('listar_escalas')
-    
-    # Obter itens agrupados por dia
-    itens = escala.itens.select_related(
-        'militar', 'calendario_dia__tipo_servico'
-    ).order_by('calendario_dia__data')
-    
-    # Agrupar por tipo de serviço (preto, vermelho, roxo)
-    itens_por_tipo = {}
-    for item in itens:
-        tipo = item.calendario_dia.tipo_servico
-        if tipo not in itens_por_tipo:
-            itens_por_tipo[tipo] = []
-        itens_por_tipo[tipo].append(item)
-    
-    # Estatísticas
-    total_dias = escala.itens.count()
-    total_militares = escala.itens.values('militar').distinct().count()
-    
-    context = {
-        'escala': escala,
-        'itens': itens,
-        'itens_por_tipo': itens_por_tipo,
-        'total_dias': total_dias,
-        'total_militares': total_militares,
-        'pode_editar': usuario_pode_editar_escala(request.user, escala),
-    }
-    
-    return render(request, 'escala/detalhar.html', context)
-
-
-@login_required
-def criar_escala(request):
-    """Cria nova escala"""
-    
-    # Verificar permissão
-    if not request.user.pode_escalar() and not request.user.pode_administrar():
-        messages.error(request, "Você não tem permissão para criar escalas.")
-        return redirect('listar_escalas')
-    
-    if request.method == 'POST':
-        form = EscalaForm(request.POST)
-        if form.is_valid():
-            escala = form.save(commit=False)
-            escala.usuario_criacao = request.user
-            escala.save()
-            
-            messages.success(
-                request,
-                f"Escala {escala.mes:02d}/{escala.ano} criada com sucesso!"
-            )
-            return redirect('detalhar_escala', escala_id=escala.id)
-    else:
-        # Se usuário é admin_om, usar sua OM como padrão
-        initial = {}
-        if request.user.pode_administrar():
-            initial['organizacao_militar'] = request.user.om_principal
-        
-        form = EscalaForm(initial=initial)
-        
-        # Limitar OMs disponíveis
-        if request.user.pode_administrar():
-            form.fields['organizacao_militar'].queryset = \
-                OrganizacaoMilitar.objects.filter(
-                    id=request.user.om_principal_id
-                )
-    
-    return render(request, 'escala/criar.html', {'form': form})
-
-
-@login_required
-def editar_escala(request, escala_id):
-    """Edita uma escala em rascunho"""
-    
-    escala = get_object_or_404(Escala, id=escala_id)
-    
-    # Verificar permissão
-    if not usuario_pode_editar_escala(request.user, escala):
-        messages.error(request, "Você não tem permissão para editar esta escala.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if escala.status == 'publicada':
-        messages.warning(request, "Escalas publicadas não podem ser alteradas.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if request.method == 'POST':
-        form = EscalaForm(request.POST, instance=escala)
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Escala atualizada com sucesso!")
-            return redirect('detalhar_escala', escala_id=escala.id)
-    else:
-        form = EscalaForm(instance=escala)
-    
-    return render(request, 'escala/editar.html', {
-        'form': form,
-        'escala': escala
-    })
-
-
-@login_required
-def gerar_automaticamente(request, escala_id):
-    """Gera escala automaticamente usando Quadrinho"""
-    
-    escala = get_object_or_404(Escala, id=escala_id)
-    
-    # Verificar permissão e status
-    if not usuario_pode_editar_escala(request.user, escala):
-        messages.error(request, "Você não tem permissão.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if escala.status != 'rascunho':
-        messages.error(request, "Apenas escalas em rascunho podem ser geradas.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if escala.itens.exists():
-        messages.warning(
-            request,
-            "Esta escala já possui itens. Limpe antes de gerar novamente."
-        )
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if request.method == 'POST':
-        try:
-            alocacoes = gerar_escala_automaticamente(escala)
-            messages.success(
-                request,
-                f"Escala gerada com sucesso! {alocacoes} alocações criadas."
-            )
-            return redirect('detalhar_escala', escala_id=escala.id)
-        except ValueError as e:
-            messages.error(request, str(e))
-    
-    # GET: mostrar confirmação
-    form = GeracaoAutomaticaEscalaForm()
-    
-    return render(request, 'escala/gerar_automaticamente.html', {
-        'escala': escala,
-        'form': form
-    })
-
-
-@login_required
-def publicar_escala(request, escala_id):
-    """Publica uma escala (muda de rascunho para publicada)"""
-    
-    escala = get_object_or_404(Escala, id=escala_id)
-    
-    # Verificar permissão
-    if not request.user.pode_administrar():
-        messages.error(request, "Apenas admins de OM podem publicar escalas.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if escala.organizacao_militar_id != request.user.om_principal_id:
-        messages.error(request, "Você não pode publicar escalas de outra OM.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if escala.status != 'rascunho':
-        messages.error(request, "Apenas escalas em rascunho podem ser publicadas.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if not escala.itens.exists():
-        messages.error(request, "Escala vazia. Preencha antes de publicar.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if request.method == 'POST':
-        form = PublicarEscalaForm(request.POST)
-        if form.is_valid():
-            try:
-                escala.publicar()
-                messages.success(
-                    request,
-                    f"Escala {escala.mes:02d}/{escala.ano} publicada com sucesso!"
-                )
-                return redirect('detalhar_escala', escala_id=escala.id)
-            except ValueError as e:
-                messages.error(request, str(e))
-    else:
-        form = PublicarEscalaForm()
-    
-    return render(request, 'escala/publicar.html', {
-        'escala': escala,
-        'form': form
-    })
-
-
-# ============================================================================
-# VIEWS DE ITEMS DE ESCALA
-# ============================================================================
-
-@login_required
-def adicionar_item_escala(request, escala_id):
-    """Adiciona militar a um dia da escala"""
-    
-    escala = get_object_or_404(Escala, id=escala_id)
-    
-    if not usuario_pode_editar_escala(request.user, escala):
-        messages.error(request, "Você não tem permissão.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if escala.status != 'rascunho':
-        messages.error(request, "Não pode adicionar itens em escala publicada.")
-        return redirect('detalhar_escala', escala_id=escala.id)
-    
-    if request.method == 'POST':
-        form = EscalaItemForm(request.POST)
-        if form.is_valid():
-            item = form.save(commit=False)
-            item.escala = escala
-            
-            # Validações adicionais
-            if item.militar.organizacao_militar_id != escala.organizacao_militar_id:
-                messages.error(request, "Militar deve pertencer à mesma OM.")
-            elif item.calendario_dia.organizacao_militar_id != escala.organizacao_militar_id:
-                messages.error(request, "Dia deve pertencer à mesma OM.")
-            else:
-                item.save()
-                messages.success(
-                    request,
-                    f"{item.militar.nome_guerra} escalado para {item.calendario_dia.data}."
-                )
-                return redirect('detalhar_escala', escala_id=escala.id)
-    else:
-        # Limitar opções aos militares e dias da OM
-        form = EscalaItemForm()
-        form.fields['militar'].queryset = Militar.objects.filter(
-            organizacao_militar=escala.organizacao_militar,
-            ativo=True
-        )
-        form.fields['calendario_dia'].queryset = obter_dias_disponiveis_mes(
-            escala.organizacao_militar,
-            escala.mes,
-            escala.ano
-        )
-    
-    return render(request, 'escala/adicionar_item.html', {
-        'escala': escala,
-        'form': form
-    })
-
-
-@login_required
-def remover_item_escala(request, item_id):
-    """Remove um item de escala"""
-    
-    item = get_object_or_404(EscalaItem, id=item_id)
-    
-    if not usuario_pode_editar_escala(request.user, item.escala):
-        messages.error(request, "Você não tem permissão.")
-        return redirect('detalhar_escala', escala_id=item.escala.id)
-    
-    if item.escala.status != 'rascunho':
-        messages.error(request, "Não pode remover itens de escala publicada.")
-        return redirect('detalhar_escala', escala_id=item.escala.id)
-    
-    if request.method == 'POST':
-        militar_nome = item.militar.nome_guerra
-        data = item.calendario_dia.data
-        escala_id = item.escala.id
-        
-        item.delete()
-        
-        messages.success(
-            request,
-            f"{militar_nome} removido de {data}."
-        )
-        return redirect('detalhar_escala', escala_id=escala_id)
-    
-    return render(request, 'escala/confirmar_remocao.html', {'item': item})
-
-
-# ============================================================================
-# VIEWS DE DASHBOARD
-# ============================================================================
+# ---------------------------------------------------------------------------
+# Dashboard
+# ---------------------------------------------------------------------------
 
 @login_required
 def dashboard(request):
-    """Dashboard com estatísticas e próximas escalas"""
-    
-    if request.user.pode_administrar():
-        oms = OrganizacaoMilitar.objects.filter(
-            id=request.user.om_principal_id
-        )
-        escalas_mes = Escala.objects.filter(
-            organizacao_militar__in=oms,
-            status='publicada'
-        ).order_by('-ano', '-mes')[:12]
-    
-    elif request.user.eh_militar and request.user.militar_associado:
-        militar = request.user.militar_associado
-        escalas_mes = EscalaItem.objects.filter(
-            militar=militar
-        ).select_related(
-            'escala', 'calendario_dia__tipo_servico'
-        ).order_by('-calendario_dia__data')[:30]
-    
-    else:
-        escalas_mes = Escala.objects.none()
-    
-    context = {
-        'escalas_mes': escalas_mes,
-        'total_militares': Militar.objects.filter(ativo=True).count() if request.user.pode_administrar() else 0,
+    om = obter_om_ativa()
+
+    contexto = {
+        'om': om,
+        'total_militares': 0,
+        'total_divisoes': 0,
+        'total_postos': Posto.objects.filter(ativo=True).count(),
+        'total_especialidades': Especialidade.objects.filter(ativo=True).count(),
+        'militares_recentes': [],
+        'divisoes_resumo': [],
     }
-    
-    return render(request, 'dashboard.html', context)
+
+    if om:
+        contexto.update({
+            'total_militares': Militar.objects.filter(
+                organizacao_militar=om, ativo=True
+            ).count(),
+            'total_divisoes': Divisao.objects.filter(
+                organizacao_militar=om, ativo=True
+            ).count(),
+            'militares_recentes': Militar.objects.filter(
+                organizacao_militar=om, ativo=True
+            ).select_related('posto', 'divisao', 'especialidade').order_by(
+                '-data_criacao'
+            )[:6],
+            'divisoes_resumo': Divisao.objects.filter(
+                organizacao_militar=om, ativo=True
+            ).annotate(
+                total_militares=Count('militares', filter=Q(militares__ativo=True))
+            ).order_by('nome'),
+        })
+
+    return render(request, 'dashboard.html', contexto)
+
+
+# ---------------------------------------------------------------------------
+# Organização Militar (singleton)
+# ---------------------------------------------------------------------------
+
+@login_required
+def organizacao_detalhe(request):
+    om = obter_om_ativa()
+    if om is None:
+        return redirect('organizacao_editar')
+    return render(request, 'cadastro/organizacao_detail.html', {'om': om})
 
 
 @login_required
-def relatorio_balanceamento(request, escala_id):
-    """Relatório de balanceamento de escalas"""
-    
-    escala = get_object_or_404(Escala, id=escala_id)
-    
-    if not usuario_pode_acessar_om(request.user, escala.organizacao_militar):
-        messages.error(request, "Você não tem acesso.")
-        return redirect('listar_escalas')
-    
-    # Calcular contagem por militar
-    contagem = escala.itens.values(
-        'militar__nome_guerra',
-        'calendario_dia__tipo_servico__nome'
-    ).annotate(
-        quantidade=Count('id')
-    ).order_by('-quantidade')
-    
-    # Obter Quadrinho para comparação
-    quadrinhos = Quadrinho.objects.filter(
-        tipo_escala=escala.tipo_escala,
-        ano=escala.ano
-    ).select_related('militar', 'tipo_servico')
-    
-    context = {
-        'escala': escala,
-        'contagem': contagem,
-        'quadrinhos': quadrinhos,
-    }
-    
-    return render(request, 'escala/relatorio_balanceamento.html', context)
+def organizacao_editar(request):
+    om = obter_om_ativa()
+    if request.method == 'POST':
+        form = OrganizacaoMilitarForm(request.POST, instance=om)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Dados da OM atualizados com sucesso.')
+            return redirect('organizacao_detalhe')
+    else:
+        form = OrganizacaoMilitarForm(instance=om)
+    return render(
+        request,
+        'cadastro/organizacao_form.html',
+        {'form': form, 'om': om},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Postos (lista global, hierarquia militar)
+# ---------------------------------------------------------------------------
+
+@login_required
+def posto_listar(request):
+    postos = Posto.objects.all().order_by('ordem_hierarquica')
+    return render(request, 'cadastro/posto_list.html', {'postos': postos})
+
+
+@login_required
+def posto_form(request, posto_id=None):
+    instancia = get_object_or_404(Posto, pk=posto_id) if posto_id else None
+    if request.method == 'POST':
+        form = PostoForm(request.POST, instance=instancia)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Posto salvo com sucesso.')
+            return redirect('posto_listar')
+    else:
+        form = PostoForm(instance=instancia)
+    return render(
+        request,
+        'cadastro/posto_form.html',
+        {'form': form, 'posto': instancia},
+    )
+
+
+@login_required
+def posto_excluir(request, posto_id):
+    posto = get_object_or_404(Posto, pk=posto_id)
+    if request.method == 'POST':
+        if posto.militares.filter(ativo=True).exists():
+            messages.error(
+                request,
+                'Existem militares ativos com este posto. '
+                'Desative o posto ao invés de excluir.',
+            )
+        else:
+            posto.ativo = False
+            posto.save()
+            messages.success(request, 'Posto desativado.')
+        return redirect('posto_listar')
+    return render(
+        request,
+        'cadastro/posto_confirm_delete.html',
+        {'posto': posto},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Especialidades
+# ---------------------------------------------------------------------------
+
+@login_required
+def especialidade_listar(request):
+    especialidades = Especialidade.objects.all().order_by('nome')
+    return render(
+        request,
+        'cadastro/especialidade_list.html',
+        {'especialidades': especialidades},
+    )
+
+
+@login_required
+def especialidade_form(request, especialidade_id=None):
+    instancia = (
+        get_object_or_404(Especialidade, pk=especialidade_id)
+        if especialidade_id else None
+    )
+    if request.method == 'POST':
+        form = EspecialidadeForm(request.POST, instance=instancia)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Especialidade salva com sucesso.')
+            return redirect('especialidade_listar')
+    else:
+        form = EspecialidadeForm(instance=instancia)
+    return render(
+        request,
+        'cadastro/especialidade_form.html',
+        {'form': form, 'especialidade': instancia},
+    )
+
+
+@login_required
+def especialidade_excluir(request, especialidade_id):
+    esp = get_object_or_404(Especialidade, pk=especialidade_id)
+    if request.method == 'POST':
+        esp.ativo = False
+        esp.save()
+        messages.success(request, 'Especialidade desativada.')
+        return redirect('especialidade_listar')
+    return render(
+        request,
+        'cadastro/especialidade_confirm_delete.html',
+        {'especialidade': esp},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Divisões (escopo por OM, mas operamos sobre a OM ativa)
+# ---------------------------------------------------------------------------
+
+@login_required
+def divisao_listar(request):
+    om = obter_om_ativa()
+    divisoes = (
+        Divisao.objects.filter(organizacao_militar=om).annotate(
+            total_militares=Count('militares', filter=Q(militares__ativo=True))
+        ).order_by('nome')
+        if om else Divisao.objects.none()
+    )
+    return render(
+        request,
+        'cadastro/divisao_list.html',
+        {'divisoes': divisoes, 'om': om},
+    )
+
+
+@login_required
+def divisao_form(request, divisao_id=None):
+    om = obter_om_ativa()
+    if om is None:
+        messages.error(request, 'Cadastre a Organização Militar antes.')
+        return redirect('organizacao_editar')
+
+    instancia = get_object_or_404(Divisao, pk=divisao_id) if divisao_id else None
+
+    if request.method == 'POST':
+        form = DivisaoForm(request.POST, instance=instancia)
+        if form.is_valid():
+            divisao = form.save(commit=False)
+            divisao.organizacao_militar = om
+            divisao.save()
+            messages.success(request, 'Divisão salva com sucesso.')
+            return redirect('divisao_listar')
+    else:
+        form = DivisaoForm(instance=instancia)
+
+    return render(
+        request,
+        'cadastro/divisao_form.html',
+        {'form': form, 'divisao': instancia, 'om': om},
+    )
+
+
+@login_required
+def divisao_excluir(request, divisao_id):
+    divisao = get_object_or_404(Divisao, pk=divisao_id)
+    if request.method == 'POST':
+        divisao.ativo = False
+        divisao.save()
+        messages.success(request, 'Divisão desativada.')
+        return redirect('divisao_listar')
+    return render(
+        request,
+        'cadastro/divisao_confirm_delete.html',
+        {'divisao': divisao},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Militares
+# ---------------------------------------------------------------------------
+
+@login_required
+def militar_listar(request):
+    om = obter_om_ativa()
+    q = request.GET.get('q', '').strip()
+    divisao_filtro = request.GET.get('divisao', '')
+    posto_filtro = request.GET.get('posto', '')
+
+    militares = (
+        Militar.objects.filter(organizacao_militar=om, ativo=True)
+        if om else Militar.objects.none()
+    )
+    militares = militares.select_related('posto', 'divisao', 'especialidade')
+
+    if q:
+        militares = militares.filter(
+            Q(nome_guerra__icontains=q)
+            | Q(nome_completo__icontains=q)
+            | Q(matricula__icontains=q)
+            | Q(cpf__icontains=q)
+        )
+
+    if divisao_filtro:
+        militares = militares.filter(divisao_id=divisao_filtro)
+
+    if posto_filtro:
+        militares = militares.filter(posto_id=posto_filtro)
+
+    militares = militares.order_by('posto__ordem_hierarquica', 'nome_guerra')
+
+    divisoes = (
+        Divisao.objects.filter(organizacao_militar=om, ativo=True).order_by('nome')
+        if om else Divisao.objects.none()
+    )
+    postos = Posto.objects.filter(ativo=True).order_by('ordem_hierarquica')
+
+    return render(
+        request,
+        'cadastro/militar_list.html',
+        {
+            'militares': militares,
+            'divisoes': divisoes,
+            'postos': postos,
+            'om': om,
+            'q': q,
+            'divisao_filtro': divisao_filtro,
+            'posto_filtro': posto_filtro,
+        },
+    )
+
+
+@login_required
+def militar_detalhe(request, militar_id):
+    militar = get_object_or_404(
+        Militar.objects.select_related('posto', 'divisao', 'especialidade', 'organizacao_militar'),
+        pk=militar_id,
+    )
+    return render(request, 'cadastro/militar_detail.html', {'militar': militar})
+
+
+@login_required
+def militar_form(request, militar_id=None):
+    om = obter_om_ativa()
+    if om is None:
+        messages.error(request, 'Cadastre a Organização Militar antes.')
+        return redirect('organizacao_editar')
+
+    instancia = get_object_or_404(Militar, pk=militar_id) if militar_id else None
+
+    if request.method == 'POST':
+        form = MilitarForm(request.POST, instance=instancia, om=om)
+        if form.is_valid():
+            militar = form.save(commit=False)
+            militar.organizacao_militar = om
+            militar.save()
+            messages.success(
+                request,
+                f'Militar {militar.nome_guerra} salvo com sucesso.',
+            )
+            return redirect('militar_detalhe', militar_id=militar.id)
+    else:
+        form = MilitarForm(instance=instancia, om=om)
+
+    return render(
+        request,
+        'cadastro/militar_form.html',
+        {'form': form, 'militar': instancia, 'om': om},
+    )
+
+
+@login_required
+def militar_excluir(request, militar_id):
+    militar = get_object_or_404(Militar, pk=militar_id)
+    if request.method == 'POST':
+        militar.ativo = False
+        militar.save()
+        messages.success(
+            request,
+            f'Militar {militar.nome_guerra} desativado (histórico preservado).',
+        )
+        return redirect('militar_listar')
+    return render(
+        request,
+        'cadastro/militar_confirm_delete.html',
+        {'militar': militar},
+    )

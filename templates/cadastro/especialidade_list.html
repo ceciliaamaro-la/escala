@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block titulo %}Especialidades{% endblock %}
+{% block conteudo %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1><i class="bi bi-award"></i> Especialidades</h1>
+        <div class="subtitle">Habilitações funcionais (PLT, MEC, ENF, COM…)</div>
+    </div>
+    <a href="{% url 'especialidade_novo' %}" class="btn btn-mil-dourado">
+        <i class="bi bi-plus-lg"></i> Nova especialidade
+    </a>
+</div>
+<div class="card-mil">
+    <table class="table table-mil mb-0">
+        <thead>
+            <tr>
+                <th style="width:120px;">Sigla</th>
+                <th>Nome</th>
+                <th>Descrição</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:160px;" class="text-end">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for esp in especialidades %}
+            <tr>
+                <td><span class="badge-posto">{{ esp.sigla }}</span></td>
+                <td>{{ esp.nome }}</td>
+                <td class="text-muted small">{{ esp.descricao|truncatechars:80|default:"—" }}</td>
+                <td>
+                    {% if esp.ativo %}<span class="badge-mil">Ativa</span>
+                    {% else %}<span class="badge-mil badge-inativo">Inativa</span>{% endif %}
+                </td>
+                <td class="text-end">
+                    <a href="{% url 'especialidade_editar' esp.id %}" class="btn btn-sm btn-mil-outline">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    {% if esp.ativo %}
+                    <a href="{% url 'especialidade_excluir' esp.id %}" class="btn btn-sm btn-mil-danger">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="text-center text-muted py-4">
+                Nenhuma especialidade cadastrada.
+                <a href="{% url 'especialidade_novo' %}">Cadastrar agora</a>.
+            </td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

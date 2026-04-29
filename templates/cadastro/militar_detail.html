@@ -1,0 +1,82 @@
+{% extends 'base.html' %}
+{% block titulo %}{{ militar.nome_guerra }}{% endblock %}
+{% block conteudo %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1>
+            <span class="badge-posto me-2">{{ militar.posto.sigla }}</span>
+            {{ militar.nome_guerra }}
+        </h1>
+        <div class="subtitle">{{ militar.nome_completo }}</div>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{% url 'militar_editar' militar.id %}" class="btn btn-mil">
+            <i class="bi bi-pencil"></i> Editar
+        </a>
+        <a href="{% url 'militar_listar' %}" class="btn btn-mil-outline">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card-mil">
+            <div class="card-mil-header">Identificação</div>
+            <div class="p-4">
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <div class="form-label">Nome completo</div>
+                        <p>{{ militar.nome_completo }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-label">Nome de guerra</div>
+                        <p><strong>{{ militar.nome_guerra }}</strong></p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-label">Matrícula</div>
+                        <p><code>{{ militar.matricula }}</code></p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-label">CPF</div>
+                        <p>{{ militar.cpf }}</p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-label">Nascimento</div>
+                        <p>{{ militar.data_nascimento|date:"d/m/Y" }} <span class="text-muted small">({{ militar.obter_idade }} anos)</span></p>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-label">Cadastrado em</div>
+                        <p>{{ militar.data_criacao|date:"d/m/Y H:i" }}</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card-mil mb-3">
+            <div class="card-mil-header">Hierarquia &amp; Lotação</div>
+            <div class="p-4">
+                <div class="form-label">Posto</div>
+                <p>{{ militar.posto.nome }} ({{ militar.posto.sigla }})</p>
+
+                <div class="form-label">Especialidade</div>
+                <p>{% if militar.especialidade %}{{ militar.especialidade.nome }} ({{ militar.especialidade.sigla }}){% else %}—{% endif %}</p>
+
+                <div class="form-label">Divisão</div>
+                <p>{% if militar.divisao %}{{ militar.divisao.nome }} ({{ militar.divisao.sigla }}){% else %}—{% endif %}</p>
+
+                <div class="form-label">OM</div>
+                <p>{{ militar.organizacao_militar.sigla }} — {{ militar.organizacao_militar.nome }}</p>
+
+                <div class="form-label">Status</div>
+                <p>
+                    {% if militar.ativo %}<span class="badge-mil">Ativo</span>
+                    {% else %}<span class="badge-mil badge-inativo">Inativo</span>{% endif %}
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

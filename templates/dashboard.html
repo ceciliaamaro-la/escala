@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Painel — Sistema de Escala{% endblock %}
+
+{% block conteudo %}
+<div class="page-header">
+    <h1><i class="bi bi-speedometer2"></i> Painel de Comando</h1>
+    <div class="subtitle">
+        {% if om %}
+            {{ om.sigla }} — {{ om.nome }}{% if om.comandante %} &middot; Cmt: {{ om.comandante }}{% endif %}
+        {% else %}
+            Nenhuma Organização Militar cadastrada
+        {% endif %}
+    </div>
+</div>
+
+{% if not om %}
+    <div class="empty-state">
+        <div class="icon"><i class="bi bi-building-add"></i></div>
+        <h5>Comece cadastrando a Organização Militar</h5>
+        <p class="mb-3">Antes de adicionar militares e divisões, configure os dados da OM.</p>
+        <a href="{% url 'organizacao_editar' %}" class="btn btn-mil">
+            <i class="bi bi-plus-lg"></i> Cadastrar OM
+        </a>
+    </div>
+{% else %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="label">Militares ativos</div>
+            <div class="value">{{ total_militares }}</div>
+            <div class="hint"><a href="{% url 'militar_listar' %}" class="text-decoration-none">ver lista &rarr;</a></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card dourado">
+            <div class="label">Divisões</div>
+            <div class="value">{{ total_divisoes }}</div>
+            <div class="hint"><a href="{% url 'divisao_listar' %}" class="text-decoration-none">gerenciar &rarr;</a></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card">
+            <div class="label">Postos cadastrados</div>
+            <div class="value">{{ total_postos }}</div>
+            <div class="hint"><a href="{% url 'posto_listar' %}" class="text-decoration-none">hierarquia &rarr;</a></div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="stat-card dourado">
+            <div class="label">Especialidades</div>
+            <div class="value">{{ total_especialidades }}</div>
+            <div class="hint"><a href="{% url 'especialidade_listar' %}" class="text-decoration-none">catálogo &rarr;</a></div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card-mil">
+            <div class="card-mil-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-people-fill"></i> Militares recém-cadastrados</span>
+                <a href="{% url 'militar_novo' %}" class="btn btn-sm btn-mil-dourado">
+                    <i class="bi bi-plus-lg"></i> Novo
+                </a>
+            </div>
+            <div class="p-0">
+                {% if militares_recentes %}
+                    <table class="table table-sm table-mil mb-0">
+                        <thead>
+                            <tr>
+                                <th>Posto</th>
+                                <th>Nome de guerra</th>
+                                <th>Divisão</th>
+                                <th>Especialidade</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for m in militares_recentes %}
+                            <tr>
+                                <td><span class="badge-posto">{{ m.posto.sigla }}</span></td>
+                                <td><strong>{{ m.nome_guerra }}</strong></td>
+                                <td>{{ m.divisao.sigla|default:'—' }}</td>
+                                <td>{{ m.especialidade.sigla|default:'—' }}</td>
+                                <td class="text-end">
+                                    <a href="{% url 'militar_detalhe' m.id %}" class="btn btn-sm btn-mil-outline">
+                                        <i class="bi bi-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <div class="empty-state border-0">
+                        <div class="icon"><i class="bi bi-person-plus"></i></div>
+                        <p class="mb-2">Nenhum militar cadastrado ainda.</p>
+                        <a href="{% url 'militar_novo' %}" class="btn btn-mil">Cadastrar primeiro militar</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card-mil h-100">
+            <div class="card-mil-header d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-diagram-3"></i> Divisões por efetivo</span>
+                <a href="{% url 'divisao_novo' %}" class="btn btn-sm btn-mil-dourado">
+                    <i class="bi bi-plus-lg"></i> Nova
+                </a>
+            </div>
+            <div class="p-3">
+                {% if divisoes_resumo %}
+                    {% for d in divisoes_resumo %}
+                        <div class="d-flex justify-content-between align-items-center py-2 border-bottom">
+                            <div>
+                                <strong>{{ d.sigla }}</strong>
+                                <span class="text-muted">— {{ d.nome }}</span>
+                            </div>
+                            <span class="badge-mil">{{ d.total_militares }} mil.</span>
+                        </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-muted text-center py-3">
+                        <i class="bi bi-diagram-3" style="font-size:1.5rem;"></i>
+                        <p class="mb-0 mt-2">Nenhuma divisão cadastrada.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endif %}
+{% endblock %}

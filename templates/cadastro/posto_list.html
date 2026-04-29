@@ -1,0 +1,62 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Postos{% endblock %}
+
+{% block conteudo %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1><i class="bi bi-stars"></i> Postos / Hierarquia</h1>
+        <div class="subtitle">Estrutura hierárquica utilizada pelos militares</div>
+    </div>
+    <a href="{% url 'posto_novo' %}" class="btn btn-mil-dourado">
+        <i class="bi bi-plus-lg"></i> Novo posto
+    </a>
+</div>
+
+<div class="card-mil">
+    <table class="table table-mil mb-0">
+        <thead>
+            <tr>
+                <th style="width:80px;">Ordem</th>
+                <th style="width:120px;">Sigla</th>
+                <th>Nome</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:160px;" class="text-end">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for posto in postos %}
+            <tr>
+                <td><strong>{{ posto.ordem_hierarquica }}</strong></td>
+                <td><span class="badge-posto">{{ posto.sigla }}</span></td>
+                <td>{{ posto.nome }}</td>
+                <td>
+                    {% if posto.ativo %}
+                        <span class="badge-mil">Ativo</span>
+                    {% else %}
+                        <span class="badge-mil badge-inativo">Inativo</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    <a href="{% url 'posto_editar' posto.id %}" class="btn btn-sm btn-mil-outline">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                    {% if posto.ativo %}
+                    <a href="{% url 'posto_excluir' posto.id %}" class="btn btn-sm btn-mil-danger">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="text-center text-muted py-4">
+                    Nenhum posto cadastrado.
+                    <a href="{% url 'posto_novo' %}">Cadastrar agora</a>.
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

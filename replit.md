@@ -1,38 +1,83 @@
 # Sistema de Escala Militar (Django)
 
-Django 6.0 application for managing military duty rosters ("escalas") across multiple military organizations (OMs). Includes models for users, military personnel, organizational units, ranks, specialties, calendars, schedules and a "Quadrinho" balancing system that distributes services fairly.
+Aplicação Django 6.0 para gestão de escalas militares ("escalas") em uma Organização Militar (OM). O schema suporta múltiplas OMs, mas a interface atual opera em modo *single-OM* (assume a primeira OM ativa). Inclui modelos para usuários, militares, divisões, postos, especialidades, calendário, escalas e o sistema "Quadrinho" de balanceamento.
 
 ## Stack
 
-- Python 3.12 + Django 6.0 (`.pythonlibs/` virtualenv managed by `uv`)
-- SQLite database (`db.sqlite3`)
-- Gunicorn for production
-- Single Django app: `escalas`
-- Project package: `core` (settings, urls, wsgi)
+- Python 3.12 + Django 6.0 (`.pythonlibs/` gerenciado por `uv`)
+- SQLite (`db.sqlite3`)
+- Bootstrap 5.3 + Bootstrap Icons + fonte Cinzel (CDN)
+- Gunicorn em produção
+- App único: `escalas` ; pacote do projeto: `core`
 
 ## Layout
 
-- `core/` — Django project (settings, urls, wsgi, asgi)
-- `escalas/` — main app (models, admin, views, forms, signals, migrations)
-- `files/` — original delivery docs (PT-BR README, usage examples)
-- `manage.py` — Django entry point
-- `db.sqlite3` — SQLite database (committed; contains seeded admin user)
+- `core/` — projeto Django (settings, urls, wsgi, asgi)
+- `escalas/`
+  - `models.py` — domínio completo
+  - `views.py` — dashboard + cadastros (atual)
+  - `views_escala_legado.py` — views antigas de escala (a integrar)
+  - `forms_cadastro.py` — ModelForms com BootstrapFormMixin
+  - `urls.py` — rotas dos cadastros
+  - `management/commands/seed_dados.py` — popula dados de exemplo
+- `templates/`
+  - `base.html` — layout principal (navbar, footer, mensagens)
+  - `registration/login.html`
+  - `dashboard.html`
+  - `cadastro/` — telas de OM, postos, especialidades, divisões e militares
+- `static/css/militar.css` — tema visual militar (verde-escuro #2c3e2d, dourado #b8860b, areia #c9b88e)
+- `db.sqlite3` — SQLite versionado
 
-## Routes
+## Rotas
 
-- `/` → redirects to `/admin/`
-- `/admin/` → Django admin (only configured UI). The PT-BR views in `escalas/views.py` exist but are not wired into URLs and reference templates that aren't included.
+Públicas:
+- `/login/`, `/logout/`
 
-## Replit configuration
+Autenticadas (login obrigatório):
+- `/` — Painel
+- `/organizacao/` e `/organizacao/editar/`
+- `/postos/`, `/postos/novo/`, `/postos/<id>/editar|excluir/`
+- `/especialidades/`, idem
+- `/divisoes/`, idem
+- `/militares/` (com filtros `q`, `divisao`, `posto`), `/militares/novo/`, `/militares/<id>/`, `/militares/<id>/editar|excluir/`
+- `/admin/` — Django admin
 
-- Workflow `Start application`: `python manage.py runserver 0.0.0.0:5000` (port 5000, webview).
+## Configuração Replit
+
+- Workflow `Start application`: `.pythonlibs/bin/python manage.py runserver 0.0.0.0:5000`
 - `core/settings.py`:
-  - `ALLOWED_HOSTS = ['*']` (required so the proxied Replit preview can reach the dev server).
-  - `CSRF_TRUSTED_ORIGINS` includes `*.replit.dev`, `*.replit.app`, `*.repl.co` and the kirk/picard subdomains.
-- Deployment: VM target running migrations then gunicorn on port 5000.
+  - `AUTH_USER_MODEL = 'escalas.UsuarioCustomizado'`
+  - `ALLOWED_HOSTS = ['*']` e `CSRF_TRUSTED_ORIGINS` para domínios `*.replit.dev`, `*.replit.app`, `*.repl.co`, `*.kirk.replit.dev`, `*.picard.replit.dev`
+  - `LANGUAGE_CODE='pt-br'`, `TIME_ZONE='America/Sao_Paulo'`
+  - `LOGIN_URL='/login/'`, `LOGIN_REDIRECT_URL='/'`, `LOGOUT_REDIRECT_URL='/login/'`
+  - `TEMPLATES['DIRS'] = [BASE_DIR/'templates']`
+  - `STATICFILES_DIRS = [BASE_DIR/'static']`
+- Deployment alvo: VM (migrações + gunicorn na porta 5000)
 
-## Notes / known issues
+## Acesso de testes
 
-- `AUTH_USER_MODEL` is **not** set even though `escalas.UsuarioCustomizado` extends `AbstractUser`. The initial migration uses a hard FK to `escalas.usuariocustomizado` instead of the swappable user reference, so changing `AUTH_USER_MODEL` later would require a fresh migration. For now `auth.User` remains the active auth model and the custom user table coexists.
-- The non-admin views (`escalas/views.py`) call methods like `request.user.pode_administrar()` that only exist on `UsuarioCustomizado`. They will not work until `AUTH_USER_MODEL` is wired up and matching templates are added.
-- SQLite is fine for the dev workflow but in a VM deployment writes live on the deployment disk; consider migrating to Postgres for multi-instance/long-term use.
+- Superusuário: `admin` / `admin123` (perfil `admin_om`, vinculado à OM `1ºBI`)
+- Dados de exemplo populados via `python manage.py seed_dados`:
+  - 1 OM (`1ºBI — 1º Batalhão de Infantaria`)
+  - 13 postos (Sd → Cel)
+  - 6 especialidades
+  - 4 divisões (DPE, DOP, DLG, DAD)
+  - 8 militares
+  - 3 tipos de serviço (Preto/Vermelho/Roxo)
+  - 365 dias do calendário 2026 (auto)
+  - tipos de escala e indisponibilidade
+
+Para repopular do zero: `python manage.py seed_dados --reset`
+
+## Padrões adotados
+
+- **Single-OM**: helper `obter_om_ativa()` em `views.py` retorna a primeira OM ativa; forms ocultam o campo `organizacao_militar` e a view o atribui automaticamente.
+- **Soft-delete**: views de exclusão setam `ativo=False` em vez de DELETE, preservando histórico.
+- **Busca em militares**: filtros combináveis por nome/matrícula/CPF + divisão + posto.
+- **Bootstrap via mixin**: `BootstrapFormMixin` aplica `form-control`/`form-select`/`form-check-input` automaticamente.
+
+## Próximos passos sugeridos
+
+- Reaproveitar `views_escala_legado.py` para reativar geração/visualização de escalas com novo visual.
+- Telas de indisponibilidades por militar.
+- Tela de calendário (cores Preto/Vermelho/Roxo) com edição manual de feriados.
