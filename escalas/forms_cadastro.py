@@ -10,6 +10,7 @@ from .models import (
     Militar,
     OrganizacaoMilitar,
     Posto,
+    Quadrinho,
     TipoIndisponibilidade,
 )
 
@@ -174,3 +175,31 @@ class MilitarForm(BootstrapFormMixin, forms.ModelForm):
             if idade < 18:
                 raise ValidationError('Militar deve ter no mínimo 18 anos.')
         return data_nascimento
+
+
+# ---------------------------------------------------------------------------
+# Quadrinho (saldo inicial + ajuste manual da quantidade)
+# ---------------------------------------------------------------------------
+
+class QuadrinhoForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = Quadrinho
+        fields = ['ajuste_inicial', 'quantidade']
+        widgets = {
+            'ajuste_inicial': forms.NumberInput(attrs={'min': 0}),
+            'quantidade': forms.NumberInput(attrs={'min': 0}),
+        }
+        labels = {
+            'ajuste_inicial': 'Saldo inicial (legado)',
+            'quantidade': 'Quantidade pelo sistema',
+        }
+        help_texts = {
+            'ajuste_inicial': (
+                'Quantos serviços o militar já tinha antes do sistema entrar no ar. '
+                'Ex.: se em abril ele já tinha 4 serviços Preto, coloque 4 aqui.'
+            ),
+            'quantidade': (
+                'Total contado automaticamente pelo sistema. Pode ser sobrescrito '
+                'manualmente quando necessário.'
+            ),
+        }

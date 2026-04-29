@@ -1,0 +1,93 @@
+{% extends 'base.html' %}
+{% block titulo %}Editar quadrinho{% endblock %}
+{% block conteudo %}
+<div class="page-header">
+    <h1><i class="bi bi-pencil-square"></i> Ajustar quadrinho</h1>
+    <div class="subtitle">
+        {{ militar.posto.sigla }} <strong>{{ militar.nome_guerra }}</strong> &middot;
+        {{ tipo_escala.nome }} &middot;
+        <span class="badge rounded-pill" style="background-color: {{ tipo_servico.cor_hex }}; color: #fff;">
+            {{ tipo_servico.nome }}
+        </span>
+        &middot; {{ ano }}
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-7">
+        <div class="card-mil">
+            <div class="card-mil-header">Valores</div>
+            <form method="post" class="p-4">
+                {% csrf_token %}
+                {% if form.non_field_errors %}
+                    <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+                {% endif %}
+
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <label for="{{ form.ajuste_inicial.id_for_label }}" class="form-label">
+                            {{ form.ajuste_inicial.label }}
+                        </label>
+                        {{ form.ajuste_inicial }}
+                        <div class="form-text">{{ form.ajuste_inicial.help_text }}</div>
+                        {% for e in form.ajuste_inicial.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                    <div class="col-md-6">
+                        <label for="{{ form.quantidade.id_for_label }}" class="form-label">
+                            {{ form.quantidade.label }}
+                        </label>
+                        {{ form.quantidade }}
+                        <div class="form-text">{{ form.quantidade.help_text }}</div>
+                        {% for e in form.quantidade.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                    </div>
+                </div>
+
+                <div class="alert alert-secondary mt-3 mb-0 small">
+                    <strong>Total exibido:</strong> saldo inicial + quantidade pelo sistema.
+                </div>
+
+                <div class="d-flex justify-content-end gap-2 mt-4">
+                    {% if voltar_para == 'militar_detalhe' %}
+                        <a href="{% url 'militar_detalhe' militar.id %}?ano={{ ano }}" class="btn btn-mil-outline">
+                            <i class="bi bi-x-lg"></i> Cancelar
+                        </a>
+                    {% else %}
+                        <a href="{% url 'quadrinho_visao' %}?ano={{ ano }}&tipo_escala={{ tipo_escala.id }}" class="btn btn-mil-outline">
+                            <i class="bi bi-x-lg"></i> Cancelar
+                        </a>
+                    {% endif %}
+                    <button type="submit" class="btn btn-mil-dourado">
+                        <i class="bi bi-check2"></i> Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-lg-5">
+        <div class="card-mil">
+            <div class="card-mil-header">Como funciona</div>
+            <div class="p-3 small">
+                <p>
+                    O <strong>quadrinho</strong> é a contagem de serviços do militar
+                    em um <em>tipo de escala</em> + <em>tipo de serviço</em> em um ano.
+                </p>
+                <ul class="mb-2">
+                    <li>
+                        <strong>Saldo inicial</strong>: serviços que o militar já tinha
+                        no controle anterior, antes do sistema entrar no ar.
+                    </li>
+                    <li>
+                        <strong>Quantidade pelo sistema</strong>: serviços contados
+                        automaticamente pelas escalas lançadas. Pode ser sobrescrito
+                        manualmente.
+                    </li>
+                </ul>
+                <p class="mb-0 text-muted">
+                    O total exibido nas listas é a soma dos dois.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

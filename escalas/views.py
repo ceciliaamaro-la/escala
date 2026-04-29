@@ -7,10 +7,13 @@ Especialidades, Militares). As views de geração de escala estão em
 Suporta múltiplas OMs: a OM ativa é mantida na sessão do usuário
 (`request.session['om_id_ativa']`) e selecionada via dropdown na navbar.
 """
+from datetime import date as _date
+
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.views.decorators.http import require_POST
 
 from .context_processors import SESSION_KEY_OM, obter_om_da_sessao
@@ -20,15 +23,20 @@ from .forms_cadastro import (
     MilitarForm,
     OrganizacaoMilitarForm,
     PostoForm,
+    QuadrinhoForm,
     TipoIndisponibilidadeForm,
 )
 from .models import (
     Divisao,
+    EscalaItem,
     Especialidade,
     Militar,
     OrganizacaoMilitar,
     Posto,
+    Quadrinho,
+    TipoEscala,
     TipoIndisponibilidade,
+    TipoServico,
 )
 
 
@@ -382,14 +390,22 @@ def militar_listar(request):
     divisao_filtro = request.GET.get('divisao', '')
     posto_filtro = request.GET.get('posto', '')
 
-    militares = (
+    ano_atual = _date.today().year
+    try:
+        ano = int(request.GET.get('ano') or ano_atual)
+    except ValueError:
+        ano = ano_atual
+
+    tipo_escala_filtro = request.GET.get('tipo_escala', '')
+
+    militares_qs = (
         Militar.objects.filter(organizacao_militar=om, ativo=True)
         if om else Militar.objects.none()
     )
-    militares = militares.select_related('posto', 'divisao', 'especialidade')
+    militares_qs = militares_qs.select_related('posto', 'divisao', 'especialidade')
 
     if q:
-        militares = militares.filter(
+        militares_qs = militares_qs.filter(
             Q(nome_guerra__icontains=q)
             | Q(nome_completo__icontains=q)
             | Q(matricula__icontains=q)
@@ -397,12 +413,13 @@ def militar_listar(request):
         )
 
     if divisao_filtro:
-        militares = militares.filter(divisao_id=divisao_filtro)
+        militares_qs = militares_qs.filter(divisao_id=divisao_filtro)
 
     if posto_filtro:
-        militares = militares.filter(posto_id=posto_filtro)
+        militares_qs = militares_qs.filter(posto_id=posto_filtro)
 
-    militares = militares.order_by('-posto__ordem_hierarquica', 'nome_guerra')
+    militares_qs = militares_qs.order_by('-posto__ordem_hierarquica', 'nome_guerra')
+    militares = list(militares_qs)
 
     divisoes = (
         Divisao.objects.filter(organizacao_militar=om, ativo=True).order_by('nome')
@@ -410,17 +427,60 @@ def militar_listar(request):
     )
     postos = Posto.objects.filter(ativo=True).order_by('-ordem_hierarquica')
 
+    tipos_escala = list(TipoEscala.objects.filter(ativo=True).order_by('nome'))
+    tipo_escala_atual = None
+    if tipo_escala_filtro:
+        tipo_escala_atual = next(
+            (t for t in tipos_escala if str(t.id) == tipo_escala_filtro), None
+        )
+    if tipo_escala_atual is None and tipos_escala:
+        tipo_escala_atual = tipos_escala[0]
+        tipo_escala_filtro = str(tipo_escala_atual.id)
+
+    tipos_servico = (
+        list(om.tipos_servico.filter(ativo=True).order_by('ordem')) if om else []
+    )
+
+    quadrinhos_map = {}
+    if om and tipo_escala_atual and militares:
+        for qd in Quadrinho.objects.filter(
+            militar__in=militares,
+            tipo_escala=tipo_escala_atual,
+            ano=ano,
+        ):
+            quadrinhos_map[(qd.militar_id, qd.tipo_servico_id)] = qd
+
+    militares_lista = []
+    for m in militares:
+        celulas = []
+        total = 0
+        for ts in tipos_servico:
+            qd = quadrinhos_map.get((m.id, ts.id))
+            valor = qd.total if qd else 0
+            celulas.append({'tipo_servico': ts, 'valor': valor})
+            total += valor
+        militares_lista.append({'militar': m, 'celulas': celulas, 'total': total})
+
+    anos_opcoes = list(range(ano_atual + 1, ano_atual - 5, -1))
+
     return render(
         request,
         'cadastro/militar_list.html',
         {
-            'militares': militares,
+            'militares_lista': militares_lista,
+            'tipos_servico': tipos_servico,
+            'tipos_escala': tipos_escala,
+            'tipo_escala_atual': tipo_escala_atual,
+            'tipo_escala_filtro': tipo_escala_filtro,
+            'ano': ano,
+            'anos_opcoes': anos_opcoes,
             'divisoes': divisoes,
             'postos': postos,
             'om': om,
             'q': q,
             'divisao_filtro': divisao_filtro,
             'posto_filtro': posto_filtro,
+            'total_militares': len(militares),
         },
     )
 
@@ -433,7 +493,274 @@ def militar_detalhe(request, militar_id):
         ),
         pk=militar_id,
     )
-    return render(request, 'cadastro/militar_detail.html', {'militar': militar})
+
+    om = militar.organizacao_militar
+    ano_atual = _date.today().year
+    try:
+        ano = int(request.GET.get('ano') or ano_atual)
+    except ValueError:
+        ano = ano_atual
+
+    tipos_servico = list(om.tipos_servico.filter(ativo=True).order_by('ordem'))
+    tipos_escala = list(TipoEscala.objects.filter(ativo=True).order_by('nome'))
+
+    quadrinhos = Quadrinho.objects.filter(militar=militar, ano=ano).select_related(
+        'tipo_escala', 'tipo_servico'
+    )
+    quadrinhos_map = {(q.tipo_escala_id, q.tipo_servico_id): q for q in quadrinhos}
+
+    contadores = []
+    for te in tipos_escala:
+        celulas = []
+        total = 0
+        tem_dado = False
+        for ts in tipos_servico:
+            qd = quadrinhos_map.get((te.id, ts.id))
+            valor = qd.total if qd else 0
+            celulas.append({
+                'tipo_servico': ts,
+                'valor': valor,
+                'quadrinho': qd,
+            })
+            total += valor
+            if qd:
+                tem_dado = True
+        contadores.append({
+            'tipo_escala': te,
+            'celulas': celulas,
+            'total': total,
+            'tem_dado': tem_dado,
+        })
+
+    itens_qs = (
+        EscalaItem.objects.filter(
+            militar=militar,
+            calendario_dia__data__year=ano,
+        )
+        .select_related(
+            'escala__tipo_escala',
+            'calendario_dia__tipo_servico',
+        )
+        .order_by('calendario_dia__data')
+    )
+    itens = list(itens_qs)
+
+    dias_servico = {it.calendario_dia.data: it for it in itens}
+
+    DIAS_SEMANA_ABREV = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom']
+
+    import calendar as _cal
+    cal = _cal.Calendar(firstweekday=0)
+    meses = []
+    for mes_num in range(1, 13):
+        nome_mes = _cal.month_name[mes_num].capitalize() if False else [
+            'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+            'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+        ][mes_num - 1]
+        semanas = []
+        tem_servico_no_mes = False
+        for semana in cal.monthdatescalendar(ano, mes_num):
+            dias_semana = []
+            for d in semana:
+                pertence_mes = d.month == mes_num
+                item = dias_servico.get(d) if pertence_mes else None
+                if item:
+                    tem_servico_no_mes = True
+                dias_semana.append({
+                    'data': d,
+                    'pertence_mes': pertence_mes,
+                    'item': item,
+                })
+            semanas.append(dias_semana)
+        meses.append({
+            'numero': mes_num,
+            'nome': nome_mes,
+            'semanas': semanas,
+            'tem_servico': tem_servico_no_mes,
+        })
+
+    anos_opcoes = list(range(ano_atual + 1, ano_atual - 5, -1))
+
+    return render(
+        request,
+        'cadastro/militar_detail.html',
+        {
+            'militar': militar,
+            'ano': ano,
+            'anos_opcoes': anos_opcoes,
+            'contadores': contadores,
+            'tipos_servico': tipos_servico,
+            'itens': itens,
+            'meses': meses,
+            'dias_semana_abrev': DIAS_SEMANA_ABREV,
+            'total_servicos_ano': len(itens),
+        },
+    )
+
+
+# ---------------------------------------------------------------------------
+# Quadrinho (visão geral por OM × Tipo de Escala × Ano)
+# ---------------------------------------------------------------------------
+
+@login_required
+def quadrinho_visao(request):
+    om = obter_om_ativa(request)
+
+    ano_atual = _date.today().year
+    try:
+        ano = int(request.GET.get('ano') or ano_atual)
+    except ValueError:
+        ano = ano_atual
+
+    tipo_escala_param = request.GET.get('tipo_escala', '')
+
+    tipos_escala = list(TipoEscala.objects.filter(ativo=True).order_by('nome'))
+    tipo_escala_atual = None
+    if tipo_escala_param:
+        tipo_escala_atual = next(
+            (t for t in tipos_escala if str(t.id) == tipo_escala_param), None
+        )
+    if tipo_escala_atual is None and tipos_escala:
+        tipo_escala_atual = tipos_escala[0]
+
+    tipos_servico = (
+        list(om.tipos_servico.filter(ativo=True).order_by('ordem')) if om else []
+    )
+
+    militares = (
+        list(
+            Militar.objects.filter(organizacao_militar=om, ativo=True)
+            .select_related('posto', 'divisao')
+        )
+        if om else []
+    )
+
+    quadrinhos_map = {}
+    if om and tipo_escala_atual and militares and tipos_servico:
+        for qd in Quadrinho.objects.filter(
+            militar__in=militares,
+            tipo_escala=tipo_escala_atual,
+            tipo_servico__in=tipos_servico,
+            ano=ano,
+        ):
+            quadrinhos_map[(qd.militar_id, qd.tipo_servico_id)] = qd
+
+    linhas = []
+    totais_coluna = {ts.id: 0 for ts in tipos_servico}
+    total_geral = 0
+    for m in militares:
+        celulas = []
+        total_militar = 0
+        for ts in tipos_servico:
+            qd = quadrinhos_map.get((m.id, ts.id))
+            valor = qd.total if qd else 0
+            celulas.append({
+                'tipo_servico': ts,
+                'quadrinho': qd,
+                'valor': valor,
+                'ajuste_inicial': qd.ajuste_inicial if qd else 0,
+                'quantidade': qd.quantidade if qd else 0,
+            })
+            totais_coluna[ts.id] += valor
+            total_militar += valor
+        linhas.append({
+            'militar': m,
+            'celulas': celulas,
+            'total': total_militar,
+        })
+        total_geral += total_militar
+
+    ordem = request.GET.get('ordem', 'desc')
+    if ordem == 'asc':
+        linhas.sort(key=lambda x: (x['total'], x['militar'].nome_guerra))
+    elif ordem == 'nome':
+        linhas.sort(key=lambda x: x['militar'].nome_guerra.lower())
+    else:
+        linhas.sort(key=lambda x: (-x['total'], x['militar'].nome_guerra))
+
+    totais_coluna_lista = [
+        {'tipo_servico': ts, 'valor': totais_coluna[ts.id]} for ts in tipos_servico
+    ]
+
+    anos_opcoes = list(range(ano_atual + 1, ano_atual - 5, -1))
+
+    return render(
+        request,
+        'cadastro/quadrinho_visao.html',
+        {
+            'om': om,
+            'ano': ano,
+            'anos_opcoes': anos_opcoes,
+            'tipos_escala': tipos_escala,
+            'tipo_escala_atual': tipo_escala_atual,
+            'tipos_servico': tipos_servico,
+            'linhas': linhas,
+            'totais_coluna': totais_coluna_lista,
+            'total_geral': total_geral,
+            'ordem': ordem,
+        },
+    )
+
+
+@login_required
+def quadrinho_editar(request, militar_id, tipo_escala_id, tipo_servico_id, ano):
+    om = obter_om_ativa(request)
+    militar = get_object_or_404(
+        Militar.objects.select_related('posto', 'organizacao_militar'),
+        pk=militar_id,
+    )
+    if om and militar.organizacao_militar_id != om.id:
+        messages.error(request, 'O militar não pertence à OM ativa.')
+        return redirect('quadrinho_visao')
+
+    tipo_escala = get_object_or_404(TipoEscala, pk=tipo_escala_id)
+    tipo_servico = get_object_or_404(
+        TipoServico, pk=tipo_servico_id, organizacao_militar=militar.organizacao_militar
+    )
+
+    quadrinho, _ = Quadrinho.objects.get_or_create(
+        militar=militar,
+        tipo_escala=tipo_escala,
+        tipo_servico=tipo_servico,
+        ano=ano,
+        defaults={'quantidade': 0, 'ajuste_inicial': 0},
+    )
+
+    voltar_para = request.GET.get('voltar', 'quadrinho_visao')
+
+    if request.method == 'POST':
+        form = QuadrinhoForm(request.POST, instance=quadrinho)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f'Quadrinho de {militar.nome_guerra} atualizado '
+                f'({tipo_escala.nome} / {tipo_servico.nome}).'
+            )
+            if voltar_para == 'militar_detalhe':
+                return redirect(
+                    f"{reverse('militar_detalhe', args=[militar.id])}?ano={ano}"
+                )
+            return redirect(
+                f"{reverse('quadrinho_visao')}?ano={ano}"
+                f"&tipo_escala={tipo_escala.id}"
+            )
+    else:
+        form = QuadrinhoForm(instance=quadrinho)
+
+    return render(
+        request,
+        'cadastro/quadrinho_form.html',
+        {
+            'form': form,
+            'quadrinho': quadrinho,
+            'militar': militar,
+            'tipo_escala': tipo_escala,
+            'tipo_servico': tipo_servico,
+            'ano': ano,
+            'voltar_para': voltar_para,
+        },
+    )
 
 
 @login_required

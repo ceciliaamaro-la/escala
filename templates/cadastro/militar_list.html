@@ -4,21 +4,33 @@
 <div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
     <div>
         <h1><i class="bi bi-people-fill"></i> Militares</h1>
-        <div class="subtitle">Efetivo cadastrado da OM &middot; total: {{ militares|length }}</div>
+        <div class="subtitle">
+            Efetivo cadastrado da OM &middot; total: {{ total_militares }}
+            {% if tipo_escala_atual %}
+                &middot; quadrinho de
+                <strong>{{ tipo_escala_atual.nome }}</strong>
+                em <strong>{{ ano }}</strong>
+            {% endif %}
+        </div>
     </div>
-    <a href="{% url 'militar_novo' %}" class="btn btn-mil-dourado">
-        <i class="bi bi-person-plus"></i> Novo militar
-    </a>
+    <div class="d-flex gap-2">
+        <a href="{% url 'quadrinho_visao' %}?ano={{ ano }}{% if tipo_escala_filtro %}&tipo_escala={{ tipo_escala_filtro }}{% endif %}" class="btn btn-mil-outline">
+            <i class="bi bi-grid-3x3-gap"></i> Quadrinho geral
+        </a>
+        <a href="{% url 'militar_novo' %}" class="btn btn-mil-dourado">
+            <i class="bi bi-person-plus"></i> Novo militar
+        </a>
+    </div>
 </div>
 
 <div class="card-mil mb-3">
     <div class="p-3">
         <form method="get" class="row g-2 align-items-end">
-            <div class="col-md-5">
+            <div class="col-md-4">
                 <label class="form-label small">Buscar</label>
                 <input type="text" name="q" value="{{ q }}" class="form-control" placeholder="Nome, nome de guerra, matrícula…">
             </div>
-            <div class="col-md-3">
+            <div class="col-md-2">
                 <label class="form-label small">Divisão</label>
                 <select name="divisao" class="form-select">
                     <option value="">Todas</option>
@@ -27,12 +39,28 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="col-md-2">
+            <div class="col-md-1">
                 <label class="form-label small">Posto</label>
                 <select name="posto" class="form-select">
                     <option value="">Todos</option>
                     {% for p in postos %}
                         <option value="{{ p.id }}" {% if p.id|stringformat:"s" == posto_filtro %}selected{% endif %}>{{ p.sigla }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Tipo de Escala</label>
+                <select name="tipo_escala" class="form-select">
+                    {% for te in tipos_escala %}
+                        <option value="{{ te.id }}" {% if te.id|stringformat:"s" == tipo_escala_filtro %}selected{% endif %}>{{ te.nome }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-1">
+                <label class="form-label small">Ano</label>
+                <select name="ano" class="form-select">
+                    {% for a in anos_opcoes %}
+                        <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -47,34 +75,52 @@
 </div>
 
 <div class="card-mil">
-    <table class="table table-mil mb-0">
+    <div class="table-responsive">
+    <table class="table table-mil mb-0 align-middle">
         <thead>
             <tr>
-                <th style="width:90px;">Posto</th>
+                <th style="width:80px;">Posto</th>
                 <th>Nome de guerra</th>
-                <th>Nome completo</th>
-                <th style="width:130px;">Matrícula</th>
-                <th style="width:110px;">Divisão</th>
-                <th style="width:110px;">Esp.</th>
-                <th style="width:110px;">Status</th>
+                <th class="d-none d-lg-table-cell">Nome completo</th>
+                <th style="width:110px;" class="d-none d-md-table-cell">Matrícula</th>
+                <th style="width:80px;" class="d-none d-md-table-cell">Divisão</th>
+                {% for ts in tipos_servico %}
+                    <th class="text-center" style="width:70px;" title="{{ ts.nome }}">
+                        <span class="badge rounded-pill"
+                              style="background-color: {{ ts.cor_hex }}; color: #fff;">
+                            {{ ts.nome|slice:":1" }}
+                        </span>
+                        <div class="small text-muted">{{ ts.nome }}</div>
+                    </th>
+                {% endfor %}
+                <th class="text-center" style="width:70px;">Total</th>
+                <th style="width:80px;">Status</th>
                 <th style="width:140px;" class="text-end">Ações</th>
             </tr>
         </thead>
         <tbody>
-            {% for m in militares %}
+            {% for linha in militares_lista %}
+            {% with m=linha.militar %}
             <tr>
                 <td><span class="badge-posto">{{ m.posto.sigla }}</span></td>
                 <td><strong>{{ m.nome_guerra }}</strong></td>
-                <td class="text-muted">{{ m.nome_completo }}</td>
-                <td><code>{{ m.matricula }}</code></td>
-                <td>{{ m.divisao.sigla|default:"—" }}</td>
-                <td>{{ m.especialidade.sigla|default:"—" }}</td>
+                <td class="text-muted d-none d-lg-table-cell">{{ m.nome_completo }}</td>
+                <td class="d-none d-md-table-cell"><code>{{ m.matricula }}</code></td>
+                <td class="d-none d-md-table-cell">{{ m.divisao.sigla|default:"—" }}</td>
+                {% for c in linha.celulas %}
+                    <td class="text-center">
+                        <span class="fw-bold">{{ c.valor }}</span>
+                    </td>
+                {% endfor %}
+                <td class="text-center">
+                    <span class="badge bg-dark">{{ linha.total }}</span>
+                </td>
                 <td>
                     {% if m.ativo %}<span class="badge-mil">Ativo</span>
                     {% else %}<span class="badge-mil badge-inativo">Inativo</span>{% endif %}
                 </td>
-                <td class="text-end">
-                    <a href="{% url 'militar_detalhe' m.id %}" class="btn btn-sm btn-mil-outline" title="Ver">
+                <td class="text-end text-nowrap">
+                    <a href="{% url 'militar_detalhe' m.id %}?ano={{ ano }}" class="btn btn-sm btn-mil" title="Detalhar">
                         <i class="bi bi-eye"></i>
                     </a>
                     <a href="{% url 'militar_editar' m.id %}" class="btn btn-sm btn-mil-outline" title="Editar">
@@ -87,13 +133,15 @@
                     {% endif %}
                 </td>
             </tr>
+            {% endwith %}
             {% empty %}
-            <tr><td colspan="8" class="text-center text-muted py-4">
+            <tr><td colspan="20" class="text-center text-muted py-4">
                 Nenhum militar encontrado.
                 <a href="{% url 'militar_novo' %}">Cadastrar agora</a>.
             </td></tr>
             {% endfor %}
         </tbody>
     </table>
+    </div>
 </div>
 {% endblock %}

@@ -74,4 +74,13 @@ urlpatterns = [
         views.militar_excluir,
         name='militar_excluir',
     ),
+
+    # Quadrinho (visão geral e edição manual de saldo/quantidade)
+    path('quadrinho/', views.quadrinho_visao, name='quadrinho_visao'),
+    path(
+        'quadrinho/<int:militar_id>/<int:tipo_escala_id>/'
+        '<int:tipo_servico_id>/<int:ano>/editar/',
+        views.quadrinho_editar,
+        name='quadrinho_editar',
+    ),
 ]

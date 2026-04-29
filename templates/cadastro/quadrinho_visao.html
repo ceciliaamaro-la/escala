@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block titulo %}Quadrinho{% endblock %}
+{% block conteudo %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1><i class="bi bi-grid-3x3-gap"></i> Quadrinho</h1>
+        <div class="subtitle">
+            Contagem de serviços por militar &middot;
+            {% if om %}{{ om.sigla }}{% else %}—{% endif %}
+            &middot; {{ ano }}
+            {% if tipo_escala_atual %} &middot; <strong>{{ tipo_escala_atual.nome }}</strong>{% endif %}
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <form method="get" class="d-flex gap-2 align-items-center">
+            <input type="hidden" name="tipo_escala" value="{{ tipo_escala_atual.id|default:'' }}">
+            <input type="hidden" name="ordem" value="{{ ordem }}">
+            <label class="small text-muted mb-0">Ano:</label>
+            <select name="ano" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+                {% for a in anos_opcoes %}
+                    <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </div>
+</div>
+
+{% if not om %}
+    <div class="alert alert-warning">Selecione uma Organização Militar na navbar.</div>
+{% elif not tipos_escala %}
+    <div class="alert alert-info">Cadastre tipos de escala para visualizar quadrinhos.</div>
+{% else %}
+
+<!-- ABAS POR TIPO DE ESCALA -->
+<ul class="nav nav-tabs mb-3" role="tablist">
+    {% for te in tipos_escala %}
+        <li class="nav-item" role="presentation">
+            <a class="nav-link {% if tipo_escala_atual.id == te.id %}active{% endif %}"
+               href="?ano={{ ano }}&tipo_escala={{ te.id }}&ordem={{ ordem }}">
+                {{ te.nome }}
+            </a>
+        </li>
+    {% endfor %}
+</ul>
+
+{% if not tipos_servico %}
+    <div class="alert alert-warning">
+        Esta OM não possui tipos de serviço configurados (Preto/Vermelho/Roxo).
+    </div>
+{% else %}
+
+<div class="card-mil">
+    <div class="card-mil-header d-flex justify-content-between align-items-center">
+        <span>{{ tipo_escala_atual.nome }} &middot; {{ ano }}</span>
+        <div class="d-flex gap-2 align-items-center">
+            <span class="small text-muted">Ordenar:</span>
+            <a href="?ano={{ ano }}&tipo_escala={{ tipo_escala_atual.id }}&ordem=desc"
+               class="btn btn-sm {% if ordem == 'desc' or not ordem %}btn-mil{% else %}btn-mil-outline{% endif %}">
+                <i class="bi bi-sort-numeric-down-alt"></i> Maior carga
+            </a>
+            <a href="?ano={{ ano }}&tipo_escala={{ tipo_escala_atual.id }}&ordem=asc"
+               class="btn btn-sm {% if ordem == 'asc' %}btn-mil{% else %}btn-mil-outline{% endif %}">
+                <i class="bi bi-sort-numeric-down"></i> Menor carga
+            </a>
+            <a href="?ano={{ ano }}&tipo_escala={{ tipo_escala_atual.id }}&ordem=nome"
+               class="btn btn-sm {% if ordem == 'nome' %}btn-mil{% else %}btn-mil-outline{% endif %}">
+                <i class="bi bi-sort-alpha-down"></i> Nome
+            </a>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-mil mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th style="width:60px;">Posto</th>
+                    <th>Militar</th>
+                    {% for ts in tipos_servico %}
+                        <th class="text-center" style="width:110px;">
+                            <span class="badge rounded-pill" style="background-color: {{ ts.cor_hex }}; color: #fff;">
+                                {{ ts.nome }}
+                            </span>
+                        </th>
+                    {% endfor %}
+                    <th class="text-center" style="width:90px;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for linha in linhas %}
+                <tr>
+                    <td><span class="badge-posto">{{ linha.militar.posto.sigla }}</span></td>
+                    <td>
+                        <a href="{% url 'militar_detalhe' linha.militar.id %}?ano={{ ano }}"
+                           class="text-decoration-none">
+                            <strong>{{ linha.militar.nome_guerra }}</strong>
+                        </a>
+                        <div class="small text-muted">{{ linha.militar.nome_completo }}</div>
+                    </td>
+                    {% for c in linha.celulas %}
+                        <td class="text-center">
+                            <a href="{% url 'quadrinho_editar' linha.militar.id tipo_escala_atual.id c.tipo_servico.id ano %}"
+                               class="text-decoration-none"
+                               title="Saldo inicial: {{ c.ajuste_inicial }} · Sistema: {{ c.quantidade }}">
+                                <span class="fw-bold fs-5 {% if c.valor == 0 %}text-muted{% endif %}">
+                                    {{ c.valor }}
+                                </span>
+                                <i class="bi bi-pencil-square small text-muted ms-1"></i>
+                            </a>
+                        </td>
+                    {% endfor %}
+                    <td class="text-center">
+                        <span class="badge bg-dark fs-6">{{ linha.total }}</span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="20" class="text-center text-muted py-4">
+                    Nenhum militar ativo cadastrado nesta OM.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+            {% if linhas %}
+            <tfoot>
+                <tr class="table-light fw-bold">
+                    <td colspan="2" class="text-end">Total geral</td>
+                    {% for tc in totais_coluna %}
+                        <td class="text-center">{{ tc.valor }}</td>
+                    {% endfor %}
+                    <td class="text-center">
+                        <span class="badge bg-dark fs-6">{{ total_geral }}</span>
+                    </td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</div>
+
+<div class="alert alert-info mt-3 small">
+    <i class="bi bi-info-circle"></i>
+    Cada número é o <strong>total</strong> do quadrinho (saldo inicial do legado +
+    serviços contados pelo sistema). Clique em qualquer número para ajustar
+    manualmente o saldo inicial e/ou a quantidade.
+</div>
+
+{% endif %}
+{% endif %}
+{% endblock %}

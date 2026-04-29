@@ -9,7 +9,15 @@
         </h1>
         <div class="subtitle">{{ militar.nome_completo }}</div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        <form method="get" class="d-flex gap-2 align-items-center">
+            <label class="small text-muted mb-0">Ano:</label>
+            <select name="ano" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
+                {% for a in anos_opcoes %}
+                    <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
+                {% endfor %}
+            </select>
+        </form>
         <a href="{% url 'militar_editar' militar.id %}" class="btn btn-mil">
             <i class="bi bi-pencil"></i> Editar
         </a>
@@ -76,6 +84,149 @@
                     {% else %}<span class="badge-mil badge-inativo">Inativo</span>{% endif %}
                 </p>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- ===================== QUADRINHO (CONTADORES) ===================== -->
+<div class="card-mil mt-3">
+    <div class="card-mil-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-grid-3x3-gap"></i> Quadrinho — {{ ano }}</span>
+        <small class="text-muted">Clique em um número para ajustar saldo / quantidade</small>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-mil mb-0 align-middle">
+            <thead>
+                <tr>
+                    <th>Tipo de Escala</th>
+                    {% for ts in tipos_servico %}
+                        <th class="text-center" style="width:90px;">
+                            <span class="badge rounded-pill" style="background-color: {{ ts.cor_hex }}; color: #fff;">
+                                {{ ts.nome }}
+                            </span>
+                        </th>
+                    {% endfor %}
+                    <th class="text-center" style="width:90px;">Total</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for c in contadores %}
+                <tr>
+                    <td><strong>{{ c.tipo_escala.nome }}</strong></td>
+                    {% for cel in c.celulas %}
+                        <td class="text-center">
+                            <a href="{% url 'quadrinho_editar' militar.id c.tipo_escala.id cel.tipo_servico.id ano %}?voltar=militar_detalhe"
+                               class="text-decoration-none"
+                               title="Saldo inicial: {{ cel.quadrinho.ajuste_inicial|default:0 }} · Sistema: {{ cel.quadrinho.quantidade|default:0 }}">
+                                <span class="fw-bold {% if cel.valor == 0 %}text-muted{% endif %}">{{ cel.valor }}</span>
+                            </a>
+                        </td>
+                    {% endfor %}
+                    <td class="text-center">
+                        <span class="badge bg-dark">{{ c.total }}</span>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="20" class="text-muted text-center py-3">
+                    Nenhum tipo de escala cadastrado.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ===================== DIAS DE SERVIÇO (LISTA) ===================== -->
+<div class="card-mil mt-3">
+    <div class="card-mil-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-check"></i> Dias de serviço em {{ ano }}</span>
+        <span class="badge bg-secondary">{{ total_servicos_ano }} dia{{ total_servicos_ano|pluralize }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-mil table-sm mb-0">
+            <thead>
+                <tr>
+                    <th style="width:130px;">Data</th>
+                    <th style="width:60px;">Dia</th>
+                    <th>Tipo de Escala</th>
+                    <th>Tipo de Serviço</th>
+                    <th>Observação</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for it in itens %}
+                {% with dia=it.calendario_dia %}
+                <tr>
+                    <td>{{ dia.data|date:"d/m/Y" }}</td>
+                    <td class="text-uppercase small text-muted">{{ dia.data|date:"D" }}</td>
+                    <td>{{ it.escala.tipo_escala.nome }}</td>
+                    <td>
+                        <span class="badge rounded-pill" style="background-color: {{ dia.tipo_servico.cor_hex }}; color: #fff;">
+                            {{ dia.tipo_servico.nome }}
+                        </span>
+                    </td>
+                    <td class="text-muted">{{ it.observacao|default:"—" }}</td>
+                </tr>
+                {% endwith %}
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-3">
+                    Nenhum dia de serviço lançado para este militar em {{ ano }}.
+                </td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- ===================== CALENDÁRIO ANUAL ===================== -->
+<div class="card-mil mt-3">
+    <div class="card-mil-header"><i class="bi bi-calendar3"></i> Calendário de serviço — {{ ano }}</div>
+    <div class="p-3">
+        <div class="row g-3">
+            {% for mes in meses %}
+            <div class="col-md-6 col-lg-4 col-xl-3">
+                <div class="card-mil mb-0 h-100 {% if not mes.tem_servico %}opacity-50{% endif %}">
+                    <div class="card-mil-header text-center py-2 small">
+                        {{ mes.nome }}
+                    </div>
+                    <div class="p-2">
+                        <table class="table table-sm table-borderless text-center mb-0" style="font-size:.72rem;">
+                            <thead>
+                                <tr class="text-muted">
+                                    {% for d in dias_semana_abrev %}
+                                        <th class="p-1">{{ d|slice:":1" }}</th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for semana in mes.semanas %}
+                                <tr>
+                                    {% for d in semana %}
+                                        <td class="p-1">
+                                            {% if d.pertence_mes %}
+                                                {% if d.item %}
+                                                    <span class="badge rounded-circle"
+                                                          style="background-color: {{ d.item.calendario_dia.tipo_servico.cor_hex }}; color:#fff; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center;"
+                                                          title="{{ d.item.escala.tipo_escala.nome }} — {{ d.item.calendario_dia.tipo_servico.nome }}">
+                                                        {{ d.data.day }}
+                                                    </span>
+                                                {% else %}
+                                                    <span class="text-muted">{{ d.data.day }}</span>
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
+                                    {% endfor %}
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="small text-muted mt-3">
+            <i class="bi bi-info-circle"></i> Os dias com bolinha colorida representam os serviços lançados no sistema (cor = tipo de serviço).
         </div>
     </div>
 </div>

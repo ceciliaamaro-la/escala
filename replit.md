@@ -41,7 +41,10 @@ Autenticadas (login obrigatório):
 - `/postos/`, `/postos/novo/`, `/postos/<id>/editar|excluir/`
 - `/especialidades/`, idem
 - `/divisoes/`, idem
-- `/militares/` (com filtros `q`, `divisao`, `posto`), `/militares/novo/`, `/militares/<id>/`, `/militares/<id>/editar|excluir/`
+- `/militares/` (com filtros `q`, `divisao`, `posto`, `tipo_escala`, `ano` — exibe colunas Preto/Vermelho/Roxo + Total do quadrinho), `/militares/novo/`, `/militares/<id>/` (calendário anual + lista detalhada de dias de serviço + contadores por tipo), `/militares/<id>/editar|excluir/`
+- `/quadrinho/` — visão geral por OM × Tipo de Escala × Ano. Abas por tipo de escala, matriz militares × tipos de serviço (Preto/Vermelho/Roxo), total por linha/coluna, ordenação por carga, células clicáveis para editar
+- `/quadrinho/<militar>/<tipo_escala>/<tipo_servico>/<ano>/editar/` — ajuste manual de `ajuste_inicial` (legado) e `quantidade` (sistema)
+- `/tipos-indisponibilidade/` (CRUD)
 - `/admin/` — Django admin
 
 ## Configuração Replit
@@ -78,8 +81,18 @@ Para repopular do zero: `python manage.py seed_dados --reset`
 - **Busca em militares**: filtros combináveis por nome/matrícula/CPF + divisão + posto.
 - **Bootstrap via mixin**: `BootstrapFormMixin` aplica `form-control`/`form-select`/`form-check-input` automaticamente.
 
+## Modelo: status da Escala
+
+`Escala.STATUS_CHOICES = [('rascunho','Rascunho'), ('previsao','Previsão'), ('publicada','Escala (Oficial)'), ('arquivada','Arquivada')]`. Fluxo: rascunho → previsão → escala (oficial) → arquivada. Métodos `marcar_previsao()` e `publicar()` controlam transições.
+
+## Modelo: Quadrinho
+
+- `quantidade` — serviços contados pelo sistema (mutável manualmente).
+- `ajuste_inicial` — saldo legado (antes do sistema entrar no ar). Necessário porque a operação começou em meio de ano com contagem prévia.
+- `total` (property) = `ajuste_inicial + quantidade`. É o valor exibido em todas as telas.
+
 ## Próximos passos sugeridos
 
-- Reaproveitar `views_escala_legado.py` para reativar geração/visualização de escalas com novo visual.
+- Reaproveitar `views_escala_legado.py` para reativar geração/visualização de escalas com novo visual, incluindo a tela de impressão "Escala atual + PREVISÃO próximo mês" no formato do PDF de referência (`attached_assets/Escala_Permanencia_*.pdf`).
 - Telas de indisponibilidades por militar.
 - Tela de calendário (cores Preto/Vermelho/Roxo) com edição manual de feriados.

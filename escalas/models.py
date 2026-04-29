@@ -723,7 +723,8 @@ class Escala(models.Model):
     
     STATUS_CHOICES = [
         ('rascunho', 'Rascunho'),
-        ('publicada', 'Publicada'),
+        ('previsao', 'Previsão'),
+        ('publicada', 'Escala (Oficial)'),
         ('arquivada', 'Arquivada'),
     ]
     
@@ -786,14 +787,33 @@ class Escala(models.Model):
     def __str__(self):
         return f"{self.organizacao_militar.sigla} - {self.tipo_escala.nome} ({self.mes:02d}/{self.ano})"
     
+    def marcar_previsao(self):
+        """Marca como Previsão (fase intermediária antes de virar Escala oficial)."""
+        if self.status not in ('rascunho', 'publicada'):
+            raise ValidationError(
+                "Só é possível marcar como Previsão a partir de Rascunho ou Escala (Oficial)."
+            )
+        self.status = 'previsao'
+        self.save()
+
     def publicar(self):
-        """Muda status para publicada e registra data"""
-        if self.status != 'rascunho':
-            raise ValidationError("Apenas escalas em rascunho podem ser publicadas")
-        
+        """Muda status para Escala (Oficial) e registra data."""
+        if self.status not in ('rascunho', 'previsao'):
+            raise ValidationError(
+                "Apenas escalas em Rascunho ou Previsão podem virar Escala (Oficial)."
+            )
+
         self.status = 'publicada'
         self.data_publicacao = timezone.now()
         self.save()
+
+    @property
+    def eh_previsao(self) -> bool:
+        return self.status == 'previsao'
+
+    @property
+    def eh_oficial(self) -> bool:
+        return self.status == 'publicada'
     
     def limpar(self):
         """Validação customizada"""
@@ -920,10 +940,20 @@ class Quadrinho(models.Model):
     
     quantidade = models.PositiveIntegerField(
         default=0,
-        help_text="Total de serviços realizados"
+        help_text="Serviços contabilizados pelo sistema (pode ser sobrescrito manualmente)"
     )
-    
+
+    ajuste_inicial = models.PositiveIntegerField(
+        default=0,
+        help_text="Saldo inicial vindo do controle anterior (legado, antes deste sistema)"
+    )
+
     data_atualizacao = models.DateTimeField(auto_now=True)
+
+    @property
+    def total(self) -> int:
+        """Soma do ajuste inicial (legado) + quantidade contada pelo sistema."""
+        return (self.ajuste_inicial or 0) + (self.quantidade or 0)
     
     class Meta:
         db_table = 'quadrinho'
