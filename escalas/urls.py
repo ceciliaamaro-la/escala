@@ -1,4 +1,4 @@
-"""URLs do módulo escalas (foco atual: cadastros)."""
+"""URLs do módulo escalas (foco atual: cadastros e seleção de OM)."""
 from django.urls import path
 
 from . import views
@@ -6,9 +6,15 @@ from . import views
 urlpatterns = [
     path('', views.dashboard, name='dashboard'),
 
-    # Organização militar (singleton)
-    path('organizacao/', views.organizacao_detalhe, name='organizacao_detalhe'),
-    path('organizacao/editar/', views.organizacao_editar, name='organizacao_editar'),
+    # Organizações Militares
+    path('organizacoes/', views.organizacao_listar, name='organizacao_listar'),
+    path('organizacoes/nova/', views.organizacao_form, name='organizacao_novo'),
+    path('organizacoes/<int:om_id>/', views.organizacao_detalhe, name='organizacao_detalhe'),
+    path('organizacoes/<int:om_id>/editar/', views.organizacao_form, name='organizacao_editar'),
+    path('om/trocar/', views.organizacao_trocar, name='organizacao_trocar'),
+
+    # Atalho para detalhe da OM ativa
+    path('organizacao/', views.organizacao_detalhe, name='organizacao_ativa'),
 
     # Postos
     path('postos/', views.posto_listar, name='posto_listar'),

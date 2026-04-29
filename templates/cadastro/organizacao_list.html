@@ -1,0 +1,79 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Organizações Militares{% endblock %}
+
+{% block conteudo %}
+<div class="page-header d-flex justify-content-between align-items-start flex-wrap gap-2">
+    <div>
+        <h1><i class="bi bi-buildings"></i> Organizações Militares</h1>
+        <div class="subtitle">FAB &middot; total: {{ oms|length }} OM(s)</div>
+    </div>
+    <a href="{% url 'organizacao_novo' %}" class="btn btn-mil-dourado">
+        <i class="bi bi-plus-lg"></i> Nova OM
+    </a>
+</div>
+
+<div class="card-mil">
+    <table class="table table-mil mb-0">
+        <thead>
+            <tr>
+                <th style="width:120px;">Sigla</th>
+                <th>Nome</th>
+                <th style="width:120px;">Tipo</th>
+                <th>Comandante</th>
+                <th style="width:100px;" class="text-center">Militares</th>
+                <th style="width:100px;" class="text-center">Divisões</th>
+                <th style="width:120px;">Status</th>
+                <th style="width:200px;" class="text-end">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for om in oms %}
+            <tr>
+                <td>
+                    <span class="badge-posto">{{ om.sigla }}</span>
+                    {% if om_ativa and om_ativa.id == om.id %}
+                        <span class="badge-om ms-1" title="OM ativa nesta sessão">ATIVA</span>
+                    {% endif %}
+                </td>
+                <td><strong>{{ om.nome }}</strong></td>
+                <td><span class="text-muted small text-uppercase">{{ om.get_tipo_display }}</span></td>
+                <td>{{ om.comandante|default:"—" }}</td>
+                <td class="text-center"><span class="badge-mil">{{ om.total_militares }}</span></td>
+                <td class="text-center"><span class="badge-mil">{{ om.total_divisoes }}</span></td>
+                <td>
+                    {% if om.ativo %}
+                        <span class="badge-mil">Ativa</span>
+                    {% else %}
+                        <span class="badge-mil badge-inativo">Inativa</span>
+                    {% endif %}
+                </td>
+                <td class="text-end">
+                    {% if om.ativo and om_ativa and om_ativa.id != om.id %}
+                    <form method="post" action="{% url 'organizacao_trocar' %}" class="d-inline">
+                        {% csrf_token %}
+                        <input type="hidden" name="om_id" value="{{ om.id }}">
+                        <input type="hidden" name="next" value="{% url 'organizacao_listar' %}">
+                        <button type="submit" class="btn btn-sm btn-mil-outline" title="Tornar OM ativa">
+                            <i class="bi bi-arrow-left-right"></i> Ativar
+                        </button>
+                    </form>
+                    {% endif %}
+                    <a href="{% url 'organizacao_detalhe' om.id %}" class="btn btn-sm btn-mil-outline" title="Ver">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                    <a href="{% url 'organizacao_editar' om.id %}" class="btn btn-sm btn-mil-outline" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="8" class="text-center text-muted py-4">
+                Nenhuma OM cadastrada.
+                <a href="{% url 'organizacao_novo' %}">Cadastrar primeira OM</a>.
+            </td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

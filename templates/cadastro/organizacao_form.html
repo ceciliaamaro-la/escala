@@ -1,11 +1,11 @@
 {% extends 'base.html' %}
 
-{% block titulo %}Editar OM{% endblock %}
+{% block titulo %}{% if om %}Editar{% else %}Cadastrar{% endif %} OM{% endblock %}
 
 {% block conteudo %}
 <div class="page-header">
     <h1><i class="bi bi-building"></i> {% if om %}Editar{% else %}Cadastrar{% endif %} Organização Militar</h1>
-    <div class="subtitle">Dados institucionais da OM principal do sistema</div>
+    <div class="subtitle">{% if om %}Atualize os dados da {{ om.sigla }}{% else %}Cadastre uma nova OM no sistema{% endif %}</div>
 </div>
 
 <div class="card-mil">
@@ -14,13 +14,13 @@
         <form method="post" novalidate>
             {% csrf_token %}
             <div class="row">
-                <div class="col-md-6">
+                <div class="col-md-8">
                     {% include 'cadastro/_form_layout.html' with form=form %}
                 </div>
             </div>
             <hr>
             <div class="d-flex justify-content-between">
-                <a href="{% if om %}{% url 'organizacao_detalhe' %}{% else %}{% url 'dashboard' %}{% endif %}" class="btn btn-mil-outline">
+                <a href="{% if om %}{% url 'organizacao_detalhe' om.id %}{% else %}{% url 'organizacao_listar' %}{% endif %}" class="btn btn-mil-outline">
                     <i class="bi bi-arrow-left"></i> Cancelar
                 </a>
                 <button type="submit" class="btn btn-mil-dourado">

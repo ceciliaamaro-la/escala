@@ -3,15 +3,17 @@ Views do Sistema de Escala Militar.
 Foco atual: dashboard, autenticação e cadastros (OM, Divisões, Postos,
 Especialidades, Militares). As views de geração de escala estão em
 `views_escala_legado.py` e serão integradas em uma próxima etapa.
-"""
-from datetime import date
 
+Suporta múltiplas OMs: a OM ativa é mantida na sessão do usuário
+(`request.session['om_id_ativa']`) e selecionada via dropdown na navbar.
+"""
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
-from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
+from django.views.decorators.http import require_POST
 
+from .context_processors import SESSION_KEY_OM, obter_om_da_sessao
 from .forms_cadastro import (
     DivisaoForm,
     EspecialidadeForm,
@@ -29,17 +31,12 @@ from .models import (
 
 
 # ---------------------------------------------------------------------------
-# Helpers — assumem operação com uma única OM (configurável depois)
+# Helpers
 # ---------------------------------------------------------------------------
 
-def obter_om_ativa():
-    """Retorna a OM ativa do sistema (modo single-OM).
-
-    Hoje o sistema é usado por uma única OM. Esse helper centraliza a busca
-    e devolve a primeira OM ativa cadastrada, ou ``None`` se ainda não houver
-    nenhuma. Mantemos o schema multi-OM intacto para evolução futura.
-    """
-    return OrganizacaoMilitar.objects.filter(ativo=True).order_by('id').first()
+def obter_om_ativa(request):
+    """Retorna a OM ativa do usuário (sessão) ou None se nenhuma cadastrada."""
+    return obter_om_da_sessao(request)
 
 
 # ---------------------------------------------------------------------------
@@ -48,7 +45,7 @@ def obter_om_ativa():
 
 @login_required
 def dashboard(request):
-    om = obter_om_ativa()
+    om = obter_om_ativa(request)
 
     contexto = {
         'om': om,
@@ -56,6 +53,7 @@ def dashboard(request):
         'total_divisoes': 0,
         'total_postos': Posto.objects.filter(ativo=True).count(),
         'total_especialidades': Especialidade.objects.filter(ativo=True).count(),
+        'total_oms': OrganizacaoMilitar.objects.filter(ativo=True).count(),
         'militares_recentes': [],
         'divisoes_resumo': [],
     }
@@ -84,33 +82,68 @@ def dashboard(request):
 
 
 # ---------------------------------------------------------------------------
-# Organização Militar (singleton)
+# Organizações Militares (multi-OM)
 # ---------------------------------------------------------------------------
 
 @login_required
-def organizacao_detalhe(request):
-    om = obter_om_ativa()
-    if om is None:
-        return redirect('organizacao_editar')
+def organizacao_listar(request):
+    oms = OrganizacaoMilitar.objects.annotate(
+        total_militares=Count('militares', filter=Q(militares__ativo=True)),
+        total_divisoes=Count('divisoes', filter=Q(divisoes__ativo=True), distinct=True),
+    ).order_by('-ativo', 'sigla')
+    return render(request, 'cadastro/organizacao_list.html', {'oms': oms})
+
+
+@login_required
+def organizacao_detalhe(request, om_id=None):
+    """Detalhe de uma OM. Se om_id não informado, usa a OM ativa."""
+    if om_id is None:
+        om = obter_om_ativa(request)
+        if om is None:
+            return redirect('organizacao_novo')
+    else:
+        om = get_object_or_404(OrganizacaoMilitar, pk=om_id)
     return render(request, 'cadastro/organizacao_detail.html', {'om': om})
 
 
 @login_required
-def organizacao_editar(request):
-    om = obter_om_ativa()
+def organizacao_form(request, om_id=None):
+    instancia = get_object_or_404(OrganizacaoMilitar, pk=om_id) if om_id else None
     if request.method == 'POST':
-        form = OrganizacaoMilitarForm(request.POST, instance=om)
+        form = OrganizacaoMilitarForm(request.POST, instance=instancia)
         if form.is_valid():
-            form.save()
-            messages.success(request, 'Dados da OM atualizados com sucesso.')
-            return redirect('organizacao_detalhe')
+            om = form.save()
+            # se for a primeira, ativa na sessão
+            if not request.session.get(SESSION_KEY_OM):
+                request.session[SESSION_KEY_OM] = om.id
+            messages.success(
+                request,
+                f'OM {om.sigla} {"atualizada" if instancia else "cadastrada"} com sucesso.',
+            )
+            return redirect('organizacao_detalhe', om_id=om.id)
     else:
-        form = OrganizacaoMilitarForm(instance=om)
+        form = OrganizacaoMilitarForm(instance=instancia)
     return render(
         request,
         'cadastro/organizacao_form.html',
-        {'form': form, 'om': om},
+        {'form': form, 'om': instancia},
     )
+
+
+@login_required
+@require_POST
+def organizacao_trocar(request):
+    """Define a OM ativa na sessão e volta para a página anterior."""
+    om_id = request.POST.get('om_id')
+    proximo = request.POST.get('next') or 'dashboard'
+    if om_id:
+        om = OrganizacaoMilitar.objects.filter(pk=om_id, ativo=True).first()
+        if om:
+            request.session[SESSION_KEY_OM] = om.id
+            messages.success(request, f'OM ativa alterada para {om.sigla}.')
+        else:
+            messages.error(request, 'OM inválida ou inativa.')
+    return redirect(proximo)
 
 
 # ---------------------------------------------------------------------------
@@ -214,12 +247,12 @@ def especialidade_excluir(request, especialidade_id):
 
 
 # ---------------------------------------------------------------------------
-# Divisões (escopo por OM, mas operamos sobre a OM ativa)
+# Divisões (escopo: OM ativa)
 # ---------------------------------------------------------------------------
 
 @login_required
 def divisao_listar(request):
-    om = obter_om_ativa()
+    om = obter_om_ativa(request)
     divisoes = (
         Divisao.objects.filter(organizacao_militar=om).annotate(
             total_militares=Count('militares', filter=Q(militares__ativo=True))
@@ -235,10 +268,10 @@ def divisao_listar(request):
 
 @login_required
 def divisao_form(request, divisao_id=None):
-    om = obter_om_ativa()
+    om = obter_om_ativa(request)
     if om is None:
-        messages.error(request, 'Cadastre a Organização Militar antes.')
-        return redirect('organizacao_editar')
+        messages.error(request, 'Cadastre uma Organização Militar antes.')
+        return redirect('organizacao_novo')
 
     instancia = get_object_or_404(Divisao, pk=divisao_id) if divisao_id else None
 
@@ -276,12 +309,12 @@ def divisao_excluir(request, divisao_id):
 
 
 # ---------------------------------------------------------------------------
-# Militares
+# Militares (escopo: OM ativa)
 # ---------------------------------------------------------------------------
 
 @login_required
 def militar_listar(request):
-    om = obter_om_ativa()
+    om = obter_om_ativa(request)
     q = request.GET.get('q', '').strip()
     divisao_filtro = request.GET.get('divisao', '')
     posto_filtro = request.GET.get('posto', '')
@@ -306,13 +339,13 @@ def militar_listar(request):
     if posto_filtro:
         militares = militares.filter(posto_id=posto_filtro)
 
-    militares = militares.order_by('posto__ordem_hierarquica', 'nome_guerra')
+    militares = militares.order_by('-posto__ordem_hierarquica', 'nome_guerra')
 
     divisoes = (
         Divisao.objects.filter(organizacao_militar=om, ativo=True).order_by('nome')
         if om else Divisao.objects.none()
     )
-    postos = Posto.objects.filter(ativo=True).order_by('ordem_hierarquica')
+    postos = Posto.objects.filter(ativo=True).order_by('-ordem_hierarquica')
 
     return render(
         request,
@@ -332,7 +365,9 @@ def militar_listar(request):
 @login_required
 def militar_detalhe(request, militar_id):
     militar = get_object_or_404(
-        Militar.objects.select_related('posto', 'divisao', 'especialidade', 'organizacao_militar'),
+        Militar.objects.select_related(
+            'posto', 'divisao', 'especialidade', 'organizacao_militar'
+        ),
         pk=militar_id,
     )
     return render(request, 'cadastro/militar_detail.html', {'militar': militar})
@@ -340,10 +375,10 @@ def militar_detalhe(request, militar_id):
 
 @login_required
 def militar_form(request, militar_id=None):
-    om = obter_om_ativa()
+    om = obter_om_ativa(request)
     if om is None:
-        messages.error(request, 'Cadastre a Organização Militar antes.')
-        return redirect('organizacao_editar')
+        messages.error(request, 'Cadastre uma Organização Militar antes.')
+        return redirect('organizacao_novo')
 
     instancia = get_object_or_404(Militar, pk=militar_id) if militar_id else None
 
