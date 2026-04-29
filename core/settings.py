@@ -25,7 +25,15 @@ SECRET_KEY = 'django-insecure-tv=yz++fhm@$vipya_&q0#5uh*8bp0-pk%!(a2jxa8yzy4ck#9
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['*']
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.replit.dev',
+    'https://*.repl.co',
+    'https://*.replit.app',
+    'https://*.kirk.replit.dev',
+    'https://*.picard.replit.dev',
+]
 
 
 # Application definition
