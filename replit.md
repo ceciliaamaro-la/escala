@@ -1,6 +1,6 @@
 # Sistema de Escala Militar (Django)
 
-Aplicação Django 6.0 para gestão de escalas militares ("escalas") em uma Organização Militar (OM). O schema suporta múltiplas OMs, mas a interface atual opera em modo *single-OM* (assume a primeira OM ativa). Inclui modelos para usuários, militares, divisões, postos, especialidades, calendário, escalas e o sistema "Quadrinho" de balanceamento.
+Aplicação Django 6.0 para gestão de escalas militares da **FAB (Força Aérea Brasileira)**. Opera em modo **multi-OM**: o usuário escolhe a OM ativa via dropdown na navbar (`/om/trocar/`) e todas as listagens/cadastros ficam escopadas àquela OM (lida da sessão em `escalas/context_processors.py::om_context`). Inclui modelos para usuários, militares, divisões, postos, especialidades, calendário, escalas e o sistema "Quadrinho" de balanceamento.
 
 ## Stack
 
@@ -25,7 +25,8 @@ Aplicação Django 6.0 para gestão de escalas militares ("escalas") em uma Orga
   - `registration/login.html`
   - `dashboard.html`
   - `cadastro/` — telas de OM, postos, especialidades, divisões e militares
-- `static/css/militar.css` — tema visual militar (verde-escuro #2c3e2d, dourado #b8860b, areia #c9b88e)
+- `escalas/context_processors.py` — `om_context` injeta `om_ativa` e `oms_disponiveis` em todos os templates
+- `static/css/militar.css` — tema visual FAB (azul #003a78, amarelo #ffd200)
 - `db.sqlite3` — SQLite versionado
 
 ## Rotas

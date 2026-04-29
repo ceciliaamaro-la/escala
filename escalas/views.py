@@ -134,8 +134,12 @@ def organizacao_form(request, om_id=None):
 @require_POST
 def organizacao_trocar(request):
     """Define a OM ativa na sessão e volta para a página anterior."""
-    om_id = request.POST.get('om_id')
+    om_id_raw = request.POST.get('om_id')
     proximo = request.POST.get('next') or 'dashboard'
+    try:
+        om_id = int(om_id_raw) if om_id_raw not in (None, '', 'None') else None
+    except (TypeError, ValueError):
+        om_id = None
     if om_id:
         om = OrganizacaoMilitar.objects.filter(pk=om_id, ativo=True).first()
         if om:
