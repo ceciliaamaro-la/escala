@@ -1,0 +1,9 @@
+
+from django.apps import AppConfig
+
+class EscalasConfig(AppConfig):
+    default_auto_field = 'django.db.models.BigAutoField'
+    name = 'escalas'
+      
+    def ready(self):
+        import escalas.signals  # ← ADICIONE ISSO

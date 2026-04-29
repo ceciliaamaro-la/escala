@@ -1,0 +1,521 @@
+"""
+============================================================================
+SISTEMA DE ESCALA MILITAR - DJANGO
+Implementação completa com modelos, admin, forms e signals
+============================================================================
+
+ARQUIVOS CRIADOS:
+  ✓ models.py       - 15 modelos Django com validações
+  ✓ admin.py        - Interface admin customizada
+  ✓ forms.py        - Formulários com validações de negócio
+  ✓ signals.py      - Automatização do Quadrinho
+
+ESTRUTURA DE DADOS:
+  OMs (Organizações Militares)
+  └── Divisões
+  └── Militares
+  └── TipoServico (Preto, Vermelho, Roxo)
+  └── CalendarioDia (cada dia do ano)
+  └── Escalas
+      └── EscalaItem (cada alocação)
+  └── Quadrinho (contagem e balanceamento)
+
+============================================================================
+INSTALAÇÃO E CONFIGURAÇÃO
+============================================================================
+
+1. ADICIONAR AO settings.py:
+
+    INSTALLED_APPS = [
+        # ... apps padrão ...
+        'django.contrib.auth',
+        'django.contrib.admin',
+        'seu_app',  # seu app Django
+    ]
+    
+    AUTH_USER_MODEL = 'seu_app.UsuarioCustomizado'  # IMPORTANTE!
+
+2. CRIAR MIGRATIONS:
+
+    python manage.py makemigrations seu_app
+    python manage.py migrate
+
+3. REGISTRAR SIGNALS EM apps.py:
+
+    from django.apps import AppConfig
+    
+    class SeuAppConfig(AppConfig):
+        default_auto_field = 'django.db.models.BigAutoField'
+        name = 'seu_app'
+        
+        def ready(self):
+            import seu_app.signals  # Importa signals.py
+
+4. CRIAR SUPERUSUÁRIO:
+
+    python manage.py createsuperuser
+    
+    username: admin
+    email: admin@example.com
+    password: (defina uma senha forte)
+    Perfil: admin_om (será ajustado no admin)
+
+5. ACESSAR ADMIN:
+
+    python manage.py runserver
+    http://localhost:8000/admin/
+    
+    Faça login com as credenciais criadas
+
+
+============================================================================
+FLUXO DE USO DO SISTEMA
+============================================================================
+
+PASSO 1: CONFIGURAR ORGANIZAÇÕES MILITARES
+──────────────────────────────────────────
+  Admin > Organizações Militares > Adicionar
+  
+  Dados:
+  - Nome: "1º Batalhão de Infantaria"
+  - Sigla: "BtlInf01"
+  - Tipo: Batalhão
+  - Comandante: Nome do chefe atual
+  
+  • Pode ter hierarquia (OM Superior)
+  • Pode ter múltiplas Divisões
+
+
+PASSO 2: CONFIGURAR DIVISÕES
+──────────────────────────────
+  Admin > Divisões > Adicionar
+  
+  Dados:
+  - OM: BtlInf01
+  - Nome: "Divisão de Pessoal"
+  - Sigla: "DPE"
+  
+  Exemplos de divisões:
+  - Divisão de Pessoal (DPE)
+  - Divisão de Operações (DOP)
+  - Divisão de Logística (DLG)
+
+
+PASSO 3: CONFIGURAR POSTOS E ESPECIALIDADES
+─────────────────────────────────────────────
+  Admin > Postos > Adicionar
+  
+  Ordem hierárquica:
+  1. Soldado (Sd) - ordem 1
+  2. Cabo (Cb) - ordem 2
+  3. Sargento (Sgt) - ordem 3
+  4. Tenente (Tte) - ordem 4
+  5. Capitão (Cap) - ordem 5
+  ... etc
+  
+  Admin > Especialidades > Adicionar
+  
+  Exemplos:
+  - Piloto (PLT)
+  - Mecânico (MEC)
+  - Enfermeiro (ENF)
+  - Comunicações (COM)
+
+
+PASSO 4: CONFIGURAR TIPOS DE SERVIÇO
+──────────────────────────────────────
+  Admin > Tipos de Serviço > Adicionar
+  
+  Para CADA OM, criar:
+  
+  Tipo 1:
+  - Nome: "Preto"
+  - Cor: #000000
+  - Descrição: "Segunda a sexta - dias úteis"
+  - Ordem: 1
+  
+  Tipo 2:
+  - Nome: "Vermelho"
+  - Cor: #FF0000
+  - Descrição: "Sábado e domingo"
+  - Ordem: 2
+  
+  Tipo 3:
+  - Nome: "Roxo"
+  - Cor: #800080
+  - Descrição: "Feriados e datas especiais"
+  - Ordem: 3
+
+
+PASSO 5: CONFIGURAR TIPOS DE ESCALA
+────────────────────────────────────
+  Admin > Tipos de Escala > Adicionar
+  
+  Criar globalmente (não é por OM):
+  - Permanência
+  - Sobreaviso
+  - Serviço Administrativo
+  (conforme necessário)
+
+
+PASSO 6: GERAR CALENDÁRIO AUTOMÁTICO
+──────────────────────────────────────
+  Admin > Calendário Dias > Gerar Calendário (action)
+  
+  Para cada OM:
+  - Selecione a OM
+  - Digite o ano (ex: 2025)
+  - Clique em "Gerar"
+  
+  Resultado:
+  - Segunda a sexta = Preto (AUTO)
+  - Sábado e domingo = Vermelho (AUTO)
+  
+  Depois, registrar feriados móveis manualmente:
+  - Carnaval
+  - Corpus Christi
+  - Ano Novo
+  etc (tipo = Roxo, origem = MANUAL)
+
+
+PASSO 7: ADICIONAR MILITARES
+──────────────────────────────
+  Admin > Militares > Adicionar
+  
+  Dados OBRIGATÓRIOS:
+  - OM
+  - Posto
+  - Nome de guerra (ex: "SILVA")
+  - Nome completo
+  - CPF (11 dígitos)
+  - Matrícula (única por OM)
+  - Data de nascimento (deve ser maior de idade)
+  
+  Dados OPCIONAIS:
+  - Divisão
+  - Especialidade
+  
+  DICA: Use a ação "Importar Militares" (CSV) para lotes
+
+
+PASSO 8: REGISTRAR INDISPONIBILIDADES
+───────────────────────────────────────
+  Admin > Indisponibilidades > Adicionar
+  
+  Se militar sairá de férias, licença, missão:
+  
+  Dados:
+  - Militar: SILVA
+  - Tipo: Férias
+  - Data de início: 01/01/2025
+  - Data de fim: 15/01/2025
+  - Observação: "Férias regulamentares"
+  
+  Durante este período, não será escalado automaticamente
+
+
+PASSO 9: CRIAR ESCALAS
+────────────────────
+  Admin > Escalas > Adicionar
+  
+  Para cada mês/tipo de escala:
+  
+  Dados:
+  - OM: BtlInf01
+  - Tipo Escala: Permanência
+  - Mês: 1 (janeiro)
+  - Ano: 2025
+  - Status: Rascunho
+  
+  Status Rascunho:
+  ✓ Pode editar itens
+  ✓ Pode gerar automaticamente
+  ✓ Não é visível para os militares
+  
+  Depois de preenchida:
+  → Mudar para "Publicada"
+  → Data de publicação é registrada automaticamente
+
+
+PASSO 10: PREENCHER ESCALA (AUTOMÁTICO)
+────────────────────────────────────────
+  Admin > Escalas > [Selecionar escala] > Ação "Gerar Automaticamente"
+  
+  Sistema:
+  1. Pega todos os dias do mês
+  2. Para cada dia, aloca o militar com MENOR serviço no Quadrinho
+  3. Respeita indisponibilidades
+  4. Incrementa o Quadrinho automaticamente via signal
+  
+  Resultado:
+  ✓ Escala preenchida e balanceada
+  ✓ Quadrinho atualizado
+  ✓ Pronto para publicar
+
+
+PASSO 11: PREENCHER ESCALA (MANUAL)
+────────────────────────────────────
+  Admin > Escala Items > Adicionar
+  
+  Para ajustes ou mudanças:
+  - Escala: [selecionar]
+  - Militar: [selecionar]
+  - Data: [selecionar dia do calendário]
+  - Observação: "Justificativa se houver"
+  
+  IMPORTANTE:
+  - Sistema valida automaticamente:
+    ✓ Militar não pode estar indisponível
+    ✓ Só 1 militar por dia/escala
+    ✓ Militar deve pertencer à mesma OM
+  - Signal incrementa Quadrinho automaticamente
+
+
+PASSO 12: PUBLICAR ESCALA
+────────────────────────
+  Admin > Escala > [Selecionar] > Status = "Publicada"
+  
+  Efeitos:
+  ✓ Data de publicação é registrada
+  ✓ Sistema registra auditoria
+  ✓ Militares conseguem visualizar
+  ✓ Não pode mais ser alterada (protege integridade)
+
+
+============================================================================
+QUADRINHO - ENTENDIMENTO E USO
+============================================================================
+
+O "Quadrinho" é um registro de contagem:
+
+  Militar: SILVA
+  Tipo Escala: Permanência
+  Tipo Serviço: Preto
+  Ano: 2025
+  Quantidade: 12
+
+Significado:
+  "SILVA foi escalado 12 vezes para Permanência em dias Pretos durante 2025"
+
+Atualização AUTOMÁTICA:
+  - Ao inserir EscalaItem → incrementa
+  - Ao deletar EscalaItem → decrementa
+  (via signals em background)
+
+Uso no algoritmo de geração:
+  SELECT militar
+  FROM quadrinho
+  WHERE tipo_escala = 'Permanência' AND tipo_servico = 'Preto' AND ano = 2025
+  ORDER BY quantidade ASC  -- menor primeiro
+  
+  → Próximo militar a escalar = com menor contagem
+
+
+Se houver erro:
+  python manage.py shell
+  >>> from seu_app.signals import resetar_quadrinho_do_ano
+  >>> resetar_quadrinho_do_ano(2025)
+  
+  Sistema recalculará toda contagem de 2025
+
+
+============================================================================
+USUÁRIOS E PERMISSÕES
+============================================================================
+
+PERFIS DISPONÍVEIS:
+
+  1. ADMIN_OM (Administrador da OM)
+     • Gerencia uma OM específica
+     • Cria escalas, adiciona militares, configura calendário
+     • Acessa apenas sua OM principal
+     • Não pode acessar outras OMs
+
+  2. ESCALANTE (Gera escalas)
+     • Responsável por gerar escalas automaticamente
+     • Pode revisar e ajustar manualmente
+     • Menos permissões que admin_om
+     • Acesso mais controlado
+
+  3. MILITAR (Consulta apenas)
+     • Visualiza sua escala pessoal
+     • Não pode editar nada
+     • Vê apenas informações relevantes
+     • Pode visualizar indisponibilidades registradas
+
+  4. GERENTE (Leitura e relatórios)
+     • Acesso de leitura a todas as escalas
+     • Pode gerar relatórios
+     • Não pode editar
+     • Visão estratégica/gerencial
+
+
+CRIAR NOVO USUÁRIO:
+
+  Admin > Usuários > Adicionar
+  
+  Dados:
+  - Username: silva_escl
+  - Email: silva@example.com
+  - First name: João
+  - Last name: Silva
+  - Password: (generate secure)
+  - OM Principal: BtlInf01
+  - Perfil: Escalante
+  - Ativo: ✓
+  
+  Admin pode mudar perfil depois no formulário de edição
+
+
+============================================================================
+ESTRUTURA DE DIRETÓRIOS SUGERIDA
+============================================================================
+
+seu_app/
+├── migrations/
+│   ├── __init__.py
+│   ├── 0001_initial.py
+│   └── ...
+├── __init__.py
+├── admin.py          ← Cole aqui
+├── apps.py           ← Ajuste "ready()" conforme instruído
+├── forms.py          ← Cole aqui
+├── models.py         ← Cole aqui (substitua)
+├── signals.py        ← Cole aqui
+├── tests.py
+├── views.py          ← Crie views para listar/editar escalas
+└── urls.py           ← Configure URLs da app
+
+
+============================================================================
+DICAS E BOAS PRÁTICAS
+============================================================================
+
+1. SEMPRE TESTAR A GERAÇÃO AUTOMÁTICA EM RASCUNHO
+   • Crie escala em rascunho
+   • Teste geração
+   • Revise antes de publicar
+
+2. MANTER MILITARES ATUALIZADOS
+   • Remova militares inativos (soft delete com flag "ativo")
+   • Atualize especialidades conforme promovam
+   • Mantenha CPF/Matrícula corretos
+
+3. REGISTRAR INDISPONIBILIDADES COM ANTECEDÊNCIA
+   • Férias: registre meses antes
+   • Licenças: assim que souber
+   • Missões: imediatamente
+
+4. REVISAR QUADRINHO MENSALMENTE
+   • Admin > Quadrinho > Filtrar por ano/mês
+   • Verifique se contagens fazem sentido
+   • Se houver inconsistências, resete e recalcule
+
+5. BACKUP REGULAR
+   • Faça backup do BD após cada escala publicada
+   • Preserve histórico de anos anteriores
+   • Documentar mudanças significativas
+
+6. AUDITORIA
+   • Todos os signals registram logs
+   • Admin mostra quem criou/quando modificou
+   • Use data_criacao e data_atualizacao
+
+7. PERFORMANCE
+   • Use select_related() em queries de Militar/Escala
+   • Index em campos frequentemente filtrados (já feito em models)
+   • Cache contagens de Quadrinho se necessário
+
+8. SEGURANÇA
+   • Sempre validar input em formulários (feito em forms.py)
+   • Proteger status 'publicada' em Escala
+   • Logs de quem publicou escala
+   • CSRF protection em todas as forms
+
+
+============================================================================
+QUERIES ÚTEIS
+============================================================================
+
+# Ver escalas de um mês
+Escala.objects.filter(mes=1, ano=2025, organizacao_militar=om)
+
+# Ver todos os itens de uma escala
+escala.itens.all().select_related('militar', 'calendario_dia')
+
+# Militar com mais serviços
+Quadrinho.objects.filter(ano=2025).order_by('-quantidade')[0]
+
+# Militar com menos serviços
+Quadrinho.objects.filter(ano=2025).order_by('quantidade')[0]
+
+# Quantas vezes SILVA foi escalado em janeiro/2025
+EscalaItem.objects.filter(
+    militar__nome_guerra='SILVA',
+    calendario_dia__data__month=1,
+    calendario_dia__data__year=2025
+).count()
+
+# Verificar indisponibilidades ativas em um período
+Indisponibilidade.objects.filter(
+    data_inicio__lte=date(2025, 1, 31),
+    data_fim__gte=date(2025, 1, 1)
+)
+
+# Resetar quadrinho de um ano (CUIDADO!)
+from seu_app.signals import resetar_quadrinho_do_ano
+resetar_quadrinho_do_ano(2025)
+
+
+============================================================================
+TROUBLESHOOTING
+============================================================================
+
+Problema: "No matches for model 'seu_app.UsuarioCustomizado'"
+Solução: Adicione AUTH_USER_MODEL em settings.py
+
+Problema: Quadrinho não está sendo incrementado
+Solução: Verifique se signals.py está importado em apps.py
+
+Problema: Erro ao gerar calendário automaticamente
+Solução: Verifique se OM tem pelo menos 2 TipoServico cadastrados
+
+Problema: Não consegue deletar militar
+Solução: Militar tem ON_DELETE=PROTECT. Desative (ativo=False) em vez de deletar.
+
+Problema: Escala publicada aparece com itens incorretos
+Solução: Não edite após publicar. Delete e recrie em rascunho.
+
+
+============================================================================
+PRÓXIMOS PASSOS
+============================================================================
+
+1. Criar Views e Templates para:
+   ✓ Listar escalas mensais
+   ✓ Visualizar escala em calendário
+   ✓ Relatório de balanceamento
+   ✓ Dashboard para cada perfil
+
+2. Integração com REST API (Django REST Framework):
+   ✓ Serializers para cada modelo
+   ✓ ViewSets customizados
+   ✓ Permissões baseadas em perfil
+
+3. Sistema de notificações:
+   ✓ Email quando escala publicada
+   ✓ Alerta de indisponibilidades próximas
+   ✓ Lembretes antes de feriados
+
+4. Relatórios avançados:
+   ✓ PDF de escalas
+   ✓ Gráficos de balanceamento
+   ✓ Análise de turnos por período
+
+5. Melhorias de UX:
+   ✓ Drag-and-drop para trocar militares
+   ✓ Visualização em calendário interativo
+   ✓ Sugestões automáticas
+
+============================================================================
+"""

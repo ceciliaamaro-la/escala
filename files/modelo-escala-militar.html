@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Modelo de Dados — Sistema de Escala Militar</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700&family=Barlow:wght@300;400;500&display=swap');
+
+  :root {
+    --bg: #0a0c0e;
+    --surface: #111417;
+    --border: #1e2530;
+    --border-bright: #2e3a48;
+    --green: #4ade80;
+    --green-dim: #1a4a2e;
+    --amber: #fbbf24;
+    --amber-dim: #3d2e08;
+    --red: #f87171;
+    --red-dim: #3d1212;
+    --blue: #60a5fa;
+    --blue-dim: #0e2340;
+    --purple: #c084fc;
+    --purple-dim: #2a1040;
+    --cyan: #22d3ee;
+    --cyan-dim: #0a2d35;
+    --text: #cbd5e1;
+    --text-muted: #4a5568;
+    --text-bright: #f1f5f9;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Barlow', sans-serif;
+    font-weight: 400;
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+  }
+
+  header {
+    text-align: center;
+    margin-bottom: 60px;
+    position: relative;
+  }
+
+  header::before {
+    content: '';
+    display: block;
+    width: 2px;
+    height: 40px;
+    background: var(--green);
+    margin: 0 auto 20px;
+    opacity: 0.6;
+  }
+
+  .sys-label {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 4px;
+    color: var(--green);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+    opacity: 0.8;
+  }
+
+  header h1 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 36px;
+    font-weight: 700;
+    color: var(--text-bright);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    line-height: 1;
+    margin-bottom: 8px;
+  }
+
+  header p {
+    font-size: 13px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 20px;
+    max-width: 1300px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 3px solid;
+    border-radius: 2px;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+  }
+
+  .card.green  { border-top-color: var(--green);  }
+  .card.amber  { border-top-color: var(--amber);  }
+  .card.red    { border-top-color: var(--red);    }
+  .card.blue   { border-top-color: var(--blue);   }
+  .card.purple { border-top-color: var(--purple); }
+  .card.cyan   { border-top-color: var(--cyan);   }
+
+  .card-header {
+    padding: 14px 18px 10px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .card-icon {
+    font-size: 16px;
+    opacity: 0.9;
+  }
+
+  .card-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .card.green  .card-title { color: var(--green);  }
+  .card.amber  .card-title { color: var(--amber);  }
+  .card.red    .card-title { color: var(--red);    }
+  .card.blue   .card-title { color: var(--blue);   }
+  .card.purple .card-title { color: var(--purple); }
+  .card.cyan   .card-title { color: var(--cyan);   }
+
+  .card-desc {
+    padding: 8px 18px 10px;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 0.5px;
+    border-bottom: 1px solid var(--border);
+    font-style: italic;
+  }
+
+  .fields {
+    padding: 10px 0;
+  }
+
+  .field {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+    padding: 5px 18px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 12px;
+    transition: background 0.15s;
+  }
+
+  .field:hover {
+    background: rgba(255,255,255,0.03);
+  }
+
+  .field-badge {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    padding: 1px 5px;
+    border-radius: 2px;
+    flex-shrink: 0;
+    min-width: 32px;
+    text-align: center;
+  }
+
+  .badge-pk {
+    background: var(--green-dim);
+    color: var(--green);
+    border: 1px solid var(--green);
+  }
+
+  .badge-fk {
+    background: var(--amber-dim);
+    color: var(--amber);
+    border: 1px solid var(--amber);
+  }
+
+  .badge-col {
+    background: transparent;
+    color: var(--text-muted);
+    border: 1px solid var(--border-bright);
+  }
+
+  .badge-enum {
+    background: var(--purple-dim);
+    color: var(--purple);
+    border: 1px solid var(--purple);
+  }
+
+  .field-name {
+    color: var(--text-bright);
+    flex: 1;
+  }
+
+  .field-type {
+    color: var(--text-muted);
+    font-size: 11px;
+  }
+
+  .field-note {
+    font-family: 'Barlow', sans-serif;
+    font-size: 10px;
+    color: var(--cyan);
+    margin-left: 4px;
+    opacity: 0.8;
+  }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 6px 18px;
+  }
+
+  /* Relations section */
+  .relations {
+    max-width: 1300px;
+    margin: 40px auto 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--cyan);
+    padding: 24px 28px;
+    border-radius: 2px;
+  }
+
+  .relations h2 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--cyan);
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .rel-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 10px;
+  }
+
+  .rel-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+  }
+
+  .rel-from { color: var(--blue); }
+  .rel-arrow { color: var(--text-muted); }
+  .rel-to { color: var(--green); }
+  .rel-card {
+    font-family: 'Barlow', sans-serif;
+    font-size: 10px;
+    color: var(--text-muted);
+    margin-left: auto;
+  }
+
+  /* Regras */
+  .rules {
+    max-width: 1300px;
+    margin: 20px auto 0;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--amber);
+    padding: 24px 28px;
+    border-radius: 2px;
+  }
+
+  .rules h2 {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    color: var(--amber);
+    text-transform: uppercase;
+    margin-bottom: 18px;
+  }
+
+  .rules ul {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+    gap: 8px;
+  }
+
+  .rules li {
+    font-size: 12px;
+    color: var(--text);
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .rules li::before {
+    content: '▸';
+    color: var(--amber);
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  footer {
+    text-align: center;
+    margin-top: 50px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 10px;
+    color: var(--text-muted);
+    letter-spacing: 2px;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="sys-label">Sistema de Escala</div>
+  <h1>Modelo de Dados</h1>
+  <p>Versão 1.0 — Domínio Militar</p>
+</header>
+
+<div class="grid">
+
+  <!-- POSTO -->
+  <div class="card green">
+    <div class="card-header">
+      <span class="card-icon">🎖️</span>
+      <span class="card-title">Posto</span>
+    </div>
+    <div class="card-desc">Hierarquia militar (Soldado, Cabo, Sargento...)</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome</span>
+        <span class="field-type">VARCHAR(60)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">sigla</span>
+        <span class="field-type">VARCHAR(10)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">ordem</span>
+        <span class="field-type">INT</span>
+        <span class="field-note">// hierarquia</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESPECIALIDADE -->
+  <div class="card green">
+    <div class="card-header">
+      <span class="card-icon">⚙️</span>
+      <span class="card-title">Especialidade</span>
+    </div>
+    <div class="card-desc">Área de atuação do militar</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome</span>
+        <span class="field-type">VARCHAR(80)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">sigla</span>
+        <span class="field-type">VARCHAR(15)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- DIVISÃO -->
+  <div class="card green">
+    <div class="card-header">
+      <span class="card-icon">🏛️</span>
+      <span class="card-title">Divisão</span>
+    </div>
+    <div class="card-desc">Seção ou unidade organizacional</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome</span>
+        <span class="field-type">VARCHAR(80)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">sigla</span>
+        <span class="field-type">VARCHAR(15)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- MILITAR -->
+  <div class="card blue">
+    <div class="card-header">
+      <span class="card-icon">🪖</span>
+      <span class="card-title">Militar</span>
+    </div>
+    <div class="card-desc">Entidade central do sistema</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">posto_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">especialidade_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">divisao_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="divider"></div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome_guerra</span>
+        <span class="field-type">VARCHAR(40)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome_completo</span>
+        <span class="field-type">VARCHAR(120)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">data_nascimento</span>
+        <span class="field-type">DATE</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">ativo</span>
+        <span class="field-type">BOOLEAN</span>
+        <span class="field-note">// soft delete</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIPO_SV (Tipo de Serviço) -->
+  <div class="card amber">
+    <div class="card-header">
+      <span class="card-icon">📅</span>
+      <span class="card-title">TipoServico</span>
+    </div>
+    <div class="card-desc">Preto, Vermelho, Roxo — configurável</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome</span>
+        <span class="field-type">VARCHAR(40)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">cor</span>
+        <span class="field-type">VARCHAR(20)</span>
+        <span class="field-note">// hex ou label</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">descricao</span>
+        <span class="field-type">TEXT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- CALENDÁRIO DIA -->
+  <div class="card amber">
+    <div class="card-header">
+      <span class="card-icon">🗓️</span>
+      <span class="card-title">CalendarioDia</span>
+    </div>
+    <div class="card-desc">Cada dia do ano com seu tipo atribuído</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">data</span>
+        <span class="field-type">DATE</span>
+        <span class="field-note">// UNIQUE</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">tipo_servico_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-enum">ENUM</span>
+        <span class="field-name">origem_tipo</span>
+        <span class="field-type">ENUM</span>
+        <span class="field-note">// AUTO, MANUAL</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">observacao</span>
+        <span class="field-type">VARCHAR(120)</span>
+        <span class="field-note">// ex: "Carnaval 2025"</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIPO_ESCALA -->
+  <div class="card purple">
+    <div class="card-header">
+      <span class="card-icon">📋</span>
+      <span class="card-title">TipoEscala</span>
+    </div>
+    <div class="card-desc">Permanência, Sobreaviso — extensível</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome</span>
+        <span class="field-type">VARCHAR(60)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">descricao</span>
+        <span class="field-type">TEXT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESCALA (cabeçalho) -->
+  <div class="card purple">
+    <div class="card-header">
+      <span class="card-icon">🗂️</span>
+      <span class="card-title">Escala</span>
+    </div>
+    <div class="card-desc">Cabeçalho da escala mensal por tipo</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">tipo_escala_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">mes</span>
+        <span class="field-type">TINYINT</span>
+        <span class="field-note">// 1-12</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">ano</span>
+        <span class="field-type">SMALLINT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-enum">ENUM</span>
+        <span class="field-name">status</span>
+        <span class="field-type">ENUM</span>
+        <span class="field-note">// RASCUNHO, PUBLICADA</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">criado_em</span>
+        <span class="field-type">TIMESTAMP</span>
+      </div>
+      <div class="divider"></div>
+      <div class="field" style="font-size:10px; color: var(--text-muted); padding-top:2px;">
+        <span style="margin-left:4px;">UNIQUE (tipo_escala_id, mes, ano)</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ESCALA ITEM -->
+  <div class="card purple">
+    <div class="card-header">
+      <span class="card-icon">📌</span>
+      <span class="card-title">EscalaItem</span>
+    </div>
+    <div class="card-desc">Um registro por dia × militar × escala</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">escala_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">militar_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">calendario_dia_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">observacao</span>
+        <span class="field-type">VARCHAR(200)</span>
+      </div>
+      <div class="divider"></div>
+      <div class="field" style="font-size:10px; color: var(--text-muted); padding-top:2px;">
+        <span style="margin-left:4px;">UNIQUE (escala_id, calendario_dia_id)</span>
+      </div>
+      <div class="field" style="font-size:10px; color: var(--text-muted); padding-top:0;">
+        <span style="margin-left:4px;">// garante 1 militar por dia/escala</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TIPO_INDISPONIBILIDADE -->
+  <div class="card red">
+    <div class="card-header">
+      <span class="card-icon">📎</span>
+      <span class="card-title">TipoIndisponibilidade</span>
+    </div>
+    <div class="card-desc">Férias, Licença, Missão, Dispensa...</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">nome</span>
+        <span class="field-type">VARCHAR(60)</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">descricao</span>
+        <span class="field-type">TEXT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- INDISPONIBILIDADE -->
+  <div class="card red">
+    <div class="card-header">
+      <span class="card-icon">🚫</span>
+      <span class="card-title">Indisponibilidade</span>
+    </div>
+    <div class="card-desc">Períodos em que o militar não pode ser escalado</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">militar_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">tipo_indisponibilidade_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">data_inicio</span>
+        <span class="field-type">DATE</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">data_fim</span>
+        <span class="field-type">DATE</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">observacao</span>
+        <span class="field-type">TEXT</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- QUADRINHO -->
+  <div class="card cyan">
+    <div class="card-header">
+      <span class="card-icon">📊</span>
+      <span class="card-title">Quadrinho</span>
+    </div>
+    <div class="card-desc">Contagem de serviços — base para balanceamento</div>
+    <div class="fields">
+      <div class="field">
+        <span class="field-badge badge-pk">PK</span>
+        <span class="field-name">id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">militar_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">tipo_escala_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-fk">FK</span>
+        <span class="field-name">tipo_servico_id</span>
+        <span class="field-type">INT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">ano</span>
+        <span class="field-type">SMALLINT</span>
+      </div>
+      <div class="field">
+        <span class="field-badge badge-col">COL</span>
+        <span class="field-name">quantidade</span>
+        <span class="field-type">INT</span>
+        <span class="field-note">// total de serviços</span>
+      </div>
+      <div class="divider"></div>
+      <div class="field" style="font-size:10px; color: var(--text-muted); padding-top:2px;">
+        <span style="margin-left:4px;">UNIQUE (militar_id, tipo_escala_id, tipo_servico_id, ano)</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- RELACIONAMENTOS -->
+<div class="relations">
+  <h2>⟶ Relacionamentos</h2>
+  <div class="rel-grid">
+    <div class="rel-item"><span class="rel-from">Militar</span><span class="rel-arrow">→</span><span class="rel-to">Posto</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Militar</span><span class="rel-arrow">→</span><span class="rel-to">Especialidade</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Militar</span><span class="rel-arrow">→</span><span class="rel-to">Divisao</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">CalendarioDia</span><span class="rel-arrow">→</span><span class="rel-to">TipoServico</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Escala</span><span class="rel-arrow">→</span><span class="rel-to">TipoEscala</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">EscalaItem</span><span class="rel-arrow">→</span><span class="rel-to">Escala</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">EscalaItem</span><span class="rel-arrow">→</span><span class="rel-to">Militar</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">EscalaItem</span><span class="rel-arrow">→</span><span class="rel-to">CalendarioDia</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Indisponibilidade</span><span class="rel-arrow">→</span><span class="rel-to">Militar</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Indisponibilidade</span><span class="rel-arrow">→</span><span class="rel-to">TipoIndisponibilidade</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Quadrinho</span><span class="rel-arrow">→</span><span class="rel-to">Militar</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Quadrinho</span><span class="rel-arrow">→</span><span class="rel-to">TipoEscala</span><span class="rel-card">N:1</span></div>
+    <div class="rel-item"><span class="rel-from">Quadrinho</span><span class="rel-arrow">→</span><span class="rel-to">TipoServico</span><span class="rel-card">N:1</span></div>
+  </div>
+</div>
+
+<!-- REGRAS DE NEGÓCIO -->
+<div class="rules">
+  <h2>⚑ Regras de Negócio Mapeadas</h2>
+  <ul>
+    <li>UNIQUE (escala_id, calendario_dia_id) em EscalaItem garante exatamente 1 militar por dia por tipo de escala</li>
+    <li>Antes de escalar, verificar se o militar possui Indisponibilidade ativa para aquela data</li>
+    <li>CalendarioDia.origem_tipo = AUTO para seg–sex (preto), sáb–dom (vermelho) e feriados nacionais fixos</li>
+    <li>Feriados móveis (Carnaval, Corpus Christi etc.) são inseridos manualmente com origem_tipo = MANUAL</li>
+    <li>Quadrinho é atualizado a cada EscalaItem inserido/removido, separado por tipo_escala + tipo_servico + ano</li>
+    <li>O algoritmo de geração usa Quadrinho para priorizar militares com menor contagem no tipo correspondente</li>
+    <li>Escala.status RASCUNHO permite edição; PUBLICADA bloqueia alterações sem permissão especial</li>
+    <li>Soft delete em Militar (campo ativo) preserva histórico de escalas e quadrinhos anteriores</li>
+  </ul>
+</div>
+
+<footer>
+  SISTEMA DE ESCALA MILITAR — MODELO v1.0 — 12 ENTIDADES
+</footer>
+
+</body>
+</html>

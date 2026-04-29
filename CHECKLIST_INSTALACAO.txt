@@ -1,0 +1,439 @@
+╔════════════════════════════════════════════════════════════════════════════════╗
+║          SISTEMA DE ESCALA MILITAR - CHECKLIST DE INSTALAÇÃO                  ║
+║                         Setup rápido - 10 minutos                             ║
+╚════════════════════════════════════════════════════════════════════════════════╝
+
+
+📋 PRÉ-REQUISITOS
+═════════════════════════════════════════════════════════════════════════════════
+
+✓ Python 3.9+ instalado
+✓ Django 4.0+ instalado
+✓ Pip ou Conda para gerenciar dependências
+✓ Um projeto Django existente
+
+📦 INSTALAÇÃO (5 MINUTOS)
+═════════════════════════════════════════════════════════════════════════════════
+
+PASSO 1: Criar/Usar App Django
+───────────────────────────────
+
+  Se não tiver uma app, crie:
+  $ python manage.py startapp escalas
+  
+  Seu projeto será como:
+  seu_projeto/
+  ├── seu_projeto/
+  │   ├── settings.py
+  │   └── ...
+  ├── escalas/              ← SUA APP
+  │   ├── migrations/
+  │   ├── __init__.py
+  │   ├── admin.py          ← SUBSTITUIR
+  │   ├── apps.py           ← MODIFICAR
+  │   ├── models.py         ← SUBSTITUIR
+  │   ├── tests.py
+  │   ├── views.py          ← MESCLAR
+  │   └── urls.py           ← CRIAR
+  └── manage.py
+
+
+PASSO 2: Copiar Arquivos
+────────────────────────
+
+  Arquivos criados (você tem estes):
+  
+  ✓ models.py              → escalas/models.py
+  ✓ admin.py               → escalas/admin.py
+  ✓ forms.py               → escalas/forms.py (NOVO)
+  ✓ signals.py             → escalas/signals.py (NOVO)
+  ✓ views.py               → escalas/views.py (MESCLAR com seu código)
+  
+  Copie os conteúdos para os arquivos da sua app.
+
+
+PASSO 3: Modificar settings.py
+──────────────────────────────
+
+  Abra seu_projeto/settings.py e adicione:
+
+  ```python
+  # ============================================================================
+  # AUTENTICAÇÃO CUSTOMIZADA
+  # ============================================================================
+  
+  AUTH_USER_MODEL = 'escalas.UsuarioCustomizado'
+  
+  # Redireção após login
+  LOGIN_URL = 'login'
+  LOGIN_REDIRECT_URL = 'dashboard'
+  
+  
+  # ============================================================================
+  # INSTALLED_APPS
+  # ============================================================================
+  
+  INSTALLED_APPS = [
+      'django.contrib.admin',
+      'django.contrib.auth',
+      'django.contrib.contenttypes',
+      'django.contrib.sessions',
+      'django.contrib.messages',
+      'django.contrib.staticfiles',
+      
+      'escalas',  # ← ADICIONE AQUI
+  ]
+  ```
+
+PASSO 4: Modificar apps.py
+─────────────────────────
+
+  Abra escalas/apps.py e substitua por:
+
+  ```python
+  from django.apps import AppConfig
+
+  class EscalasConfig(AppConfig):
+      default_auto_field = 'django.db.models.BigAutoField'
+      name = 'escalas'
+      
+      def ready(self):
+          import escalas.signals  # ← ADICIONE ISSO
+  ```
+
+PASSO 5: Criar e Rodar Migrações
+────────────────────────────────
+
+  No terminal do seu projeto:
+
+  $ python manage.py makemigrations escalas
+  
+  Output esperado:
+  Migrations for 'escalas':
+    escalas/migrations/0001_initial.py
+    - Create model OrganizacaoMilitar
+    - Create model UsuarioCustomizado
+    - ...
+
+  Depois aplique:
+  
+  $ python manage.py migrate
+  
+  Output esperado:
+  Operations to perform:
+    Apply all migrations: admin, auth, contenttypes, escalas, sessions
+  ...
+  Applying escalas.0001_initial... OK
+
+
+PASSO 6: Criar Superusuário
+──────────────────────────
+
+  $ python manage.py createsuperuser
+  
+  Digite:
+  username: admin
+  email: admin@example.com
+  password: (escolha uma senha forte)
+  password (again): (repita)
+
+  Output esperado:
+  Superuser created successfully.
+
+PASSO 7: Teste a Instalação
+──────────────────────────
+
+  $ python manage.py runserver
+  
+  Acesse: http://localhost:8000/admin/
+  
+  Login com:
+  username: admin
+  password: (a que você criou)
+  
+  Você deve ver os modelos:
+  ✓ Usuários Customizados
+  ✓ Organizações Militares
+  ✓ Militares
+  ✓ Postos
+  ✓ Especialidades
+  ✓ Divisões
+  ✓ Tipos de Serviço
+  ✓ Tipos de Escala
+  ✓ Calendário Dias
+  ✓ Escalas
+  ✓ Escala Items
+  ✓ Quadrinho
+  ✓ Indisponibilidades
+  ✓ etc...
+
+✅ INSTALAÇÃO CONCLUÍDA!
+
+
+═════════════════════════════════════════════════════════════════════════════════
+PRIMEIROS PASSOS (3 MINUTOS)
+═════════════════════════════════════════════════════════════════════════════════
+
+Agora você está pronto para usar o sistema. Siga este fluxo rápido:
+
+1. ✓ Criar uma OM (Organização Militar)
+   Admin > Organizações Militares > Adicionar
+   - Nome: "1º Batalhão"
+   - Sigla: "BtlInf01"
+   - Tipo: Batalhão
+
+2. ✓ Criar Tipos de Serviço
+   Admin > Tipos de Serviço > Adicionar (3 tipos para sua OM)
+   - Preto (#000000) - seg-sex
+   - Vermelho (#FF0000) - sáb-dom
+   - Roxo (#800080) - feriados
+
+3. ✓ Gerar Calendário
+   Admin > Calendário Dias > (selecione OM) > Ação "Gerar Calendário"
+   - OM: BtlInf01
+   - Ano: 2025
+   - Gerar!
+
+4. ✓ Cadastrar Militares
+   Admin > Militares > Adicionar
+   - OM: BtlInf01
+   - Nome de guerra: SILVA
+   - CPF: válido (11 dígitos)
+   - Matrícula: BtlInf01001
+   - Data nascimento: 01/01/1995 (exemplo)
+   - Posto: Soldado
+
+5. ✓ Criar Primeira Escala
+   Admin > Escalas > Adicionar
+   - OM: BtlInf01
+   - Tipo: Permanência
+   - Mês: 1
+   - Ano: 2025
+   - Status: Rascunho
+
+6. ✓ Gerar Automaticamente
+   Admin > Escalas > [selecione sua escala] > Ação "Gerar Automaticamente"
+   - Sistema aloca militares automaticamente
+   - Respeita indisponibilidades
+   - Usa Quadrinho para balancear
+
+7. ✓ Publicar
+   Admin > Escalas > [selecione] > Status = Publicada
+   - Pronto para militares visualizarem!
+
+Agora leia o GUIA_IMPLEMENTACAO.txt para entender tudo em detalhes.
+
+
+═════════════════════════════════════════════════════════════════════════════════
+TROUBLESHOOTING RÁPIDO
+═════════════════════════════════════════════════════════════════════════════════
+
+❌ Erro: "No matches for model 'escalas.UsuarioCustomizado'"
+
+   ✓ Solução: Você esqueceu de colocar AUTH_USER_MODEL em settings.py
+   Adicione: AUTH_USER_MODEL = 'escalas.UsuarioCustomizado'
+
+──────────────────────────────────────────────────────────────────────────────
+
+❌ Erro: "Quadrinho não está sendo incrementado"
+
+   ✓ Solução: Verifique se signals.py está sendo importado em apps.py
+   Em escalas/apps.py, método ready():
+   
+   def ready(self):
+       import escalas.signals
+
+──────────────────────────────────────────────────────────────────────────────
+
+❌ Erro ao gerar calendário: "OM deve ter pelo menos 2 tipos de serviço"
+
+   ✓ Solução: Crie PRIMEIRO os Tipos de Serviço para a OM
+   Admin > Tipos de Serviço > Adicionar (3 tipos mínimo)
+
+──────────────────────────────────────────────────────────────────────────────
+
+❌ Erro: "IntegrityError at /admin/..."
+
+   ✓ Solução: Duplicatas ou dados inválidos
+   - Verifique CPF (deve ser único)
+   - Verifique Matrícula (deve ser única por OM)
+   - Verifique se a OM existe
+
+──────────────────────────────────────────────────────────────────────────────
+
+❌ Modelo não aparece no admin
+
+   ✓ Solução: Verifique se está registrado em admin.py
+   Deve ter: @admin.register(SeuModelo)
+
+
+═════════════════════════════════════════════════════════════════════════════════
+ESTRUTURA FINAL DO PROJETO
+═════════════════════════════════════════════════════════════════════════════════
+
+seu_projeto/
+│
+├── manage.py
+│
+├── seu_projeto/
+│   ├── settings.py          (✓ MODIFICADO: AUTH_USER_MODEL)
+│   ├── urls.py
+│   ├── wsgi.py
+│   └── asgi.py
+│
+├── escalas/
+│   ├── migrations/
+│   │   ├── __init__.py
+│   │   └── 0001_initial.py
+│   │
+│   ├── __init__.py
+│   ├── apps.py              (✓ MODIFICADO: ready() com signals)
+│   ├── models.py            (✓ NOVO: 15 modelos)
+│   ├── admin.py             (✓ NOVO: interface admin)
+│   ├── forms.py             (✓ NOVO: formulários)
+│   ├── signals.py           (✓ NOVO: automação)
+│   ├── views.py             (✓ NOVO/MESCLAR: views)
+│   ├── urls.py              (✓ CRIAR: rotas)
+│   └── tests.py
+│
+├── templates/
+│   ├── base.html
+│   ├── escalas/
+│   │   ├── listar.html
+│   │   ├── detalhar.html
+│   │   ├── criar.html
+│   │   └── ...
+│   └── ...
+│
+├── static/
+│   └── ...
+│
+└── db.sqlite3 (ou seu BD configurado)
+
+
+═════════════════════════════════════════════════════════════════════════════════
+COMANDOS ÚTEIS
+═════════════════════════════════════════════════════════════════════════════════
+
+# Servidor de desenvolvimento
+$ python manage.py runserver
+
+# Criar novo superusuário
+$ python manage.py createsuperuser
+
+# Entrar no shell Django (para scripts)
+$ python manage.py shell
+
+# Ver dados do BD
+$ python manage.py dbshell
+
+# Fazer backup
+$ python manage.py dumpdata > backup.json
+
+# Restaurar backup
+$ python manage.py loaddata backup.json
+
+# Resetar tudo (CUIDADO!)
+$ python manage.py flush
+
+# Criar nova migração
+$ python manage.py makemigrations
+
+# Aplicar migrações
+$ python manage.py migrate
+
+
+═════════════════════════════════════════════════════════════════════════════════
+PRÓXIMAS ETAPAS (Depois de Instalado)
+═════════════════════════════════════════════════════════════════════════════════
+
+1. ✓ Leia GUIA_IMPLEMENTACAO.txt para entender o fluxo completo
+
+2. ✓ Execute os EXEMPLOS_DE_USO.py no shell Django:
+   $ python manage.py shell
+   >>> exec(open('EXEMPLOS_DE_USO.py').read())
+
+3. ✓ Crie suas próprias views em escalas/views.py
+   (Template com views.py já tem código base)
+
+4. ✓ Configure URLs em escalas/urls.py:
+   
+   from django.urls import path
+   from . import views
+   
+   urlpatterns = [
+       path('escalas/', views.listar_escalas, name='listar_escalas'),
+       path('escalas/<int:escala_id>/', views.detalhar_escala, name='detalhar_escala'),
+       path('dashboard/', views.dashboard, name='dashboard'),
+       # ... etc
+   ]
+
+5. ✓ Inclua no seu_projeto/urls.py:
+   
+   from django.urls import path, include
+   
+   urlpatterns = [
+       path('admin/', admin.site.urls),
+       path('escala/', include('escalas.urls')),  # ← ADICIONE
+   ]
+
+6. ✓ Crie templates em templates/escalas/
+   (Estão prontos para customização no views.py)
+
+7. ✓ Customize CSS/Bootstrap conforme sua marca
+
+
+═════════════════════════════════════════════════════════════════════════════════
+DOCUMENTAÇÃO
+═════════════════════════════════════════════════════════════════════════════════
+
+📖 GUIA_IMPLEMENTACAO.txt
+   ├─ Configuração completa
+   ├─ Fluxo passo-a-passo
+   ├─ Explicação de cada modelo
+   ├─ Dicas e boas práticas
+   └─ Troubleshooting detalhado
+
+📋 README.md
+   ├─ Visão geral do projeto
+   ├─ Diagrama de dados (ER)
+   ├─ Estrutura de permissões
+   ├─ Fluxo principal
+   └─ Destaques técnicos
+
+🔧 EXEMPLOS_DE_USO.py
+   ├─ Scripts prontos para shell Django
+   ├─ Criação de dados de teste
+   ├─ Queries úteis
+   ├─ Operações administrativas
+   └─ Testes de validações
+
+📝 models.py / admin.py / forms.py / signals.py / views.py
+   └─ Código comentado e documentado
+
+
+═════════════════════════════════════════════════════════════════════════════════
+SUPORTE
+═════════════════════════════════════════════════════════════════════════════════
+
+Se tiver problemas:
+
+1. ✓ Verifique o arquivo de erro (terminal)
+2. ✓ Consulte GUIA_IMPLEMENTACAO.txt (seção Troubleshooting)
+3. ✓ Verifique se os arquivos foram copiados corretamente
+4. ✓ Teste com os EXEMPLOS_DE_USO.py
+5. ✓ Procure por "✗ Erro:" neste arquivo
+
+
+═════════════════════════════════════════════════════════════════════════════════
+✅ VOCÊ ESTÁ PRONTO!
+
+Agora execute:
+  $ python manage.py runserver
+  
+E acesse:
+  http://localhost:8000/admin/
+
+Bem-vindo ao Sistema de Escala Militar! 🪖
+
+═════════════════════════════════════════════════════════════════════════════════
