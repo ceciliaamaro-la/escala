@@ -20,6 +20,7 @@ from .forms_cadastro import (
     MilitarForm,
     OrganizacaoMilitarForm,
     PostoForm,
+    TipoIndisponibilidadeForm,
 )
 from .models import (
     Divisao,
@@ -27,6 +28,7 @@ from .models import (
     Militar,
     OrganizacaoMilitar,
     Posto,
+    TipoIndisponibilidade,
 )
 
 
@@ -247,6 +249,63 @@ def especialidade_excluir(request, especialidade_id):
         request,
         'cadastro/especialidade_confirm_delete.html',
         {'especialidade': esp},
+    )
+
+
+# ---------------------------------------------------------------------------
+# Tipos de Indisponibilidade (lista global)
+# ---------------------------------------------------------------------------
+
+@login_required
+def tipo_indisponibilidade_listar(request):
+    tipos = TipoIndisponibilidade.objects.all().order_by('nome')
+    return render(
+        request,
+        'cadastro/tipo_indisponibilidade_list.html',
+        {'tipos': tipos},
+    )
+
+
+@login_required
+def tipo_indisponibilidade_form(request, tipo_id=None):
+    instancia = (
+        get_object_or_404(TipoIndisponibilidade, pk=tipo_id) if tipo_id else None
+    )
+    if request.method == 'POST':
+        form = TipoIndisponibilidadeForm(request.POST, instance=instancia)
+        if form.is_valid():
+            form.save()
+            messages.success(request, 'Tipo de indisponibilidade salvo com sucesso.')
+            return redirect('tipo_indisponibilidade_listar')
+    else:
+        form = TipoIndisponibilidadeForm(instance=instancia)
+    return render(
+        request,
+        'cadastro/tipo_indisponibilidade_form.html',
+        {'form': form, 'tipo': instancia},
+    )
+
+
+@login_required
+def tipo_indisponibilidade_excluir(request, tipo_id):
+    tipo = get_object_or_404(TipoIndisponibilidade, pk=tipo_id)
+    if request.method == 'POST':
+        if tipo.indisponibilidades.exists():
+            tipo.ativo = False
+            tipo.save()
+            messages.success(
+                request,
+                'Tipo de indisponibilidade desativado (existem registros vinculados, '
+                'histórico preservado).',
+            )
+        else:
+            tipo.delete()
+            messages.success(request, 'Tipo de indisponibilidade excluído.')
+        return redirect('tipo_indisponibilidade_listar')
+    return render(
+        request,
+        'cadastro/tipo_indisponibilidade_confirm_delete.html',
+        {'tipo': tipo},
     )
 
 

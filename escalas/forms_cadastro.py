@@ -10,6 +10,7 @@ from .models import (
     Militar,
     OrganizacaoMilitar,
     Posto,
+    TipoIndisponibilidade,
 )
 
 
@@ -66,6 +67,19 @@ class EspecialidadeForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Especialidade
         fields = ['nome', 'sigla', 'descricao', 'ativo']
+        widgets = {
+            'descricao': forms.Textarea(attrs={'rows': 3}),
+        }
+
+
+# ---------------------------------------------------------------------------
+# Tipo de Indisponibilidade
+# ---------------------------------------------------------------------------
+
+class TipoIndisponibilidadeForm(BootstrapFormMixin, forms.ModelForm):
+    class Meta:
+        model = TipoIndisponibilidade
+        fields = ['nome', 'descricao', 'exclui_do_sorteio', 'ativo']
         widgets = {
             'descricao': forms.Textarea(attrs={'rows': 3}),
         }

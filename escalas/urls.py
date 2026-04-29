@@ -36,6 +36,28 @@ urlpatterns = [
         name='especialidade_excluir',
     ),
 
+    # Tipos de Indisponibilidade
+    path(
+        'tipos-indisponibilidade/',
+        views.tipo_indisponibilidade_listar,
+        name='tipo_indisponibilidade_listar',
+    ),
+    path(
+        'tipos-indisponibilidade/novo/',
+        views.tipo_indisponibilidade_form,
+        name='tipo_indisponibilidade_novo',
+    ),
+    path(
+        'tipos-indisponibilidade/<int:tipo_id>/editar/',
+        views.tipo_indisponibilidade_form,
+        name='tipo_indisponibilidade_editar',
+    ),
+    path(
+        'tipos-indisponibilidade/<int:tipo_id>/excluir/',
+        views.tipo_indisponibilidade_excluir,
+        name='tipo_indisponibilidade_excluir',
+    ),
+
     # Divisões
     path('divisoes/', views.divisao_listar, name='divisao_listar'),
     path('divisoes/novo/', views.divisao_form, name='divisao_novo'),
