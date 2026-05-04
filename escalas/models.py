@@ -1026,3 +1026,78 @@ class Quadrinho(models.Model):
             qs = qs.filter(militar__organizacao_militar=om)
         
         return qs
+
+
+# ============================================================================
+# CONFIGURAÇÃO DE REGRAS DA ESCALA
+# ============================================================================
+
+class ConfiguracaoEscala(models.Model):
+    """
+    Configuração de regras operacionais da escala por OM.
+    Permite ajustar folga mínima e regras de bloqueio sem alterar o código.
+    """
+
+    organizacao_militar = models.OneToOneField(
+        OrganizacaoMilitar,
+        on_delete=models.CASCADE,
+        related_name='configuracao_escala',
+        help_text="OM à qual esta configuração se aplica"
+    )
+
+    folga_minima_horas = models.PositiveIntegerField(
+        default=48,
+        help_text=(
+            "Horas mínimas de folga exigidas após um serviço ou retorno de "
+            "férias/indisponibilidade antes de novo serviço. "
+            "Exemplo: 48 = dois dias de folga."
+        )
+    )
+
+    duracao_servico_horas = models.PositiveIntegerField(
+        default=24,
+        help_text=(
+            "Duração padrão de um serviço em horas. "
+            "Usado para calcular quando o militar fica livre após o serviço."
+        )
+    )
+
+    bloquear_pre_ferias = models.BooleanField(
+        default=True,
+        help_text=(
+            "Se ativado, bloqueia serviços que terminariam dentro do período "
+            "de folga mínima antes do início de uma férias/indisponibilidade."
+        )
+    )
+
+    bloquear_pos_ferias = models.BooleanField(
+        default=True,
+        help_text=(
+            "Se ativado, bloqueia serviços dentro do período de folga mínima "
+            "após o retorno de férias/indisponibilidade."
+        )
+    )
+
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'configuracao_escala'
+        verbose_name = 'Configuração de Escala'
+        verbose_name_plural = 'Configurações de Escala'
+
+    def __str__(self):
+        return f"Config {self.organizacao_militar.sigla} (folga {self.folga_minima_horas}h)"
+
+    @classmethod
+    def obter_para_om(cls, om: OrganizacaoMilitar) -> 'ConfiguracaoEscala':
+        """Retorna (ou cria com padrões) a configuração da OM."""
+        config, _ = cls.objects.get_or_create(organizacao_militar=om)
+        return config
+
+    @property
+    def folga_minima_dias(self) -> int:
+        return max(1, self.folga_minima_horas // 24)
+
+    @property
+    def duracao_servico_dias(self) -> int:
+        return max(1, self.duracao_servico_horas // 24)

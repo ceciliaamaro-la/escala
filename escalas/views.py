@@ -31,6 +31,7 @@ from .forms_cadastro import (
 )
 from .models import (
     CalendarioDia,
+    ConfiguracaoEscala,
     Divisao,
     Escala,
     EscalaItem,
@@ -1189,11 +1190,14 @@ def escala_gerar(request, escala_id):
             messages.error(request, 'Nenhum militar ativo nesta OM.')
             return redirect('escala_detalhar', escala_id=escala_id)
 
-        # ----- Indisponibilidades -----
-        indisp = obter_indisponibilidades(lista_militares, primeiro_dia, ultimo_dia)
+        # ----- Configuração de regras da escala -----
+        config = ConfiguracaoEscala.obter_para_om(om)
+
+        # ----- Indisponibilidades (com regras de folga aplicadas) -----
+        indisp = obter_indisponibilidades(lista_militares, primeiro_dia, ultimo_dia, config=config)
 
         # ----- Rodar algoritmo de matriz -----
-        resultado = gerar_escala_matriz(lista_militares, lista_dias, indisp)
+        resultado = gerar_escala_matriz(lista_militares, lista_dias, indisp, config=config)
 
         # ----- Persistir itens -----
         criados = 0
@@ -1280,6 +1284,51 @@ def escala_publicar(request, escala_id):
     except Exception as e:
         messages.error(request, str(e))
     return redirect('escala_detalhar', escala_id=escala_id)
+
+
+@login_required
+@require_POST
+def escala_excluir(request, escala_id):
+    """Exclui completamente uma escala (cabeçalho + todos os itens)."""
+    escala = get_object_or_404(Escala, pk=escala_id)
+    if escala.status == 'publicada':
+        messages.error(request, 'Escalas publicadas não podem ser excluídas.')
+        return redirect('escala_detalhar', escala_id=escala_id)
+    nome = str(escala)
+    escala.delete()
+    messages.success(request, f'Escala "{nome}" excluída com sucesso.')
+    return redirect('escala_listar')
+
+
+@login_required
+def configuracao_escala(request):
+    """Tela de configuração das regras operacionais da escala para a OM ativa."""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.warning(request, 'Selecione ou cadastre uma OM antes de configurar.')
+        return redirect('organizacao_novo')
+
+    config = ConfiguracaoEscala.obter_para_om(om)
+
+    if request.method == 'POST':
+        try:
+            folga = int(request.POST.get('folga_minima_horas', 48))
+            duracao = int(request.POST.get('duracao_servico_horas', 24))
+            if folga < 0 or duracao < 1:
+                raise ValueError
+        except (TypeError, ValueError):
+            messages.error(request, 'Valores inválidos. Informe números inteiros positivos.')
+            return redirect('configuracao_escala')
+
+        config.folga_minima_horas = folga
+        config.duracao_servico_horas = duracao
+        config.bloquear_pre_ferias = 'bloquear_pre_ferias' in request.POST
+        config.bloquear_pos_ferias = 'bloquear_pos_ferias' in request.POST
+        config.save()
+        messages.success(request, 'Configurações salvas com sucesso.')
+        return redirect('configuracao_escala')
+
+    return render(request, 'escala/configuracao.html', {'config': config, 'om': om})
 
 
 @login_required

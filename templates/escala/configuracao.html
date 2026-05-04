@@ -1,0 +1,179 @@
+{% extends 'base.html' %}
+{% block titulo %}Configurações de Escala — {{ block.super }}{% endblock %}
+
+{% block conteudo %}
+<div class="row justify-content-center">
+    <div class="col-md-8 col-lg-7">
+
+        <div class="d-flex align-items-center gap-2 mb-4">
+            <a href="{% url 'escala_listar' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h2 class="mb-0"><i class="bi bi-sliders"></i> Configurações de Escala</h2>
+        </div>
+
+        {% if om %}
+        <p class="text-muted">
+            <i class="bi bi-buildings"></i> OM ativa: <strong>{{ om.sigla }} — {{ om.nome }}</strong>
+        </p>
+        {% endif %}
+
+        <div class="card shadow-sm mb-4">
+            <div class="card-header fw-semibold" style="background:#003a78;color:#fff;">
+                <i class="bi bi-clock-history"></i> Regras de Folga
+            </div>
+            <div class="card-body">
+                <form method="post">
+                    {% csrf_token %}
+
+                    <div class="row g-3">
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="id_folga_minima_horas">
+                                Folga mínima entre serviços (horas)
+                            </label>
+                            <input type="number" class="form-control" id="id_folga_minima_horas"
+                                   name="folga_minima_horas" min="0" max="720"
+                                   value="{{ config.folga_minima_horas }}">
+                            <div class="form-text">
+                                Horas de descanso obrigatório após encerramento de um serviço ou
+                                retorno de férias/indisponibilidade.
+                                <strong>Padrão: 48 h (2 dias)</strong>.
+                            </div>
+                            <div class="mt-1">
+                                <small class="text-primary fw-semibold" id="folga-calc"></small>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <label class="form-label fw-semibold" for="id_duracao_servico_horas">
+                                Duração do serviço (horas)
+                            </label>
+                            <input type="number" class="form-control" id="id_duracao_servico_horas"
+                                   name="duracao_servico_horas" min="1" max="168"
+                                   value="{{ config.duracao_servico_horas }}">
+                            <div class="form-text">
+                                Quantas horas dura um serviço padrão.
+                                <strong>Padrão: 24 h</strong>.
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <div class="alert alert-info small py-2 mb-0" id="exemplo-calculo">
+                            </div>
+                        </div>
+
+                        <div class="col-12">
+                            <hr>
+                            <p class="fw-semibold mb-2"><i class="bi bi-calendar-x"></i> Bloqueio em relação a férias/indisponibilidades</p>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="id_bloquear_pre_ferias" name="bloquear_pre_ferias"
+                                       {% if config.bloquear_pre_ferias %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="id_bloquear_pre_ferias">
+                                    Bloquear pré-férias
+                                </label>
+                            </div>
+                            <div class="form-text ms-4">
+                                Impede que o militar seja escalado nos dias anteriores ao início
+                                de férias/indisponibilidade, garantindo que ele não fique em
+                                serviço quando o período começar.
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="id_bloquear_pos_ferias" name="bloquear_pos_ferias"
+                                       {% if config.bloquear_pos_ferias %}checked{% endif %}>
+                                <label class="form-check-label fw-semibold" for="id_bloquear_pos_ferias">
+                                    Bloquear pós-férias
+                                </label>
+                            </div>
+                            <div class="form-text ms-4">
+                                Impede que o militar seja escalado logo após retorno de
+                                férias/indisponibilidade, garantindo o período mínimo de
+                                descanso antes do próximo serviço.
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <hr>
+                    <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary fw-semibold">
+                            <i class="bi bi-floppy"></i> Salvar Configurações
+                        </button>
+                        <a href="{% url 'escala_listar' %}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-secondary mb-4">
+            <div class="card-header fw-semibold small">
+                <i class="bi bi-info-circle"></i> Como as regras funcionam
+            </div>
+            <div class="card-body small text-secondary">
+                <ul class="mb-0">
+                    <li class="mb-1">
+                        <strong>Folga entre serviços:</strong> após um serviço de 24 h (encerra no dia seguinte),
+                        o militar não pode ser escalado durante a folga mínima configurada.
+                        Ex.: serviço em 07/06 → encerra 08/06 → com 48 h de folga, próximo serviço a partir de 11/06.
+                    </li>
+                    <li class="mb-1">
+                        <strong>Bloqueio pré-férias:</strong> o sistema bloqueia automaticamente os dias imediatamente
+                        antes do início de férias/indisponibilidade, equivalentes à folga mínima.
+                        Ex.: férias em 15/06 com folga de 48 h → não pode ser escalado em 13/06 e 14/06.
+                    </li>
+                    <li>
+                        <strong>Bloqueio pós-férias:</strong> após o retorno (último dia + 1), o militar
+                        precisa de folga mínima antes de assumir serviço.
+                        Ex.: férias até 26/06 com folga de 48 h → pode servir a partir de 29/06.
+                    </li>
+                </ul>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+    const folgaInput = document.getElementById('id_folga_minima_horas');
+    const duracaoInput = document.getElementById('id_duracao_servico_horas');
+    const exemploDiv = document.getElementById('exemplo-calculo');
+    const folgaCalc = document.getElementById('folga-calc');
+
+    function atualizar() {
+        const folga = parseInt(folgaInput.value) || 0;
+        const duracao = parseInt(duracaoInput.value) || 24;
+        const folgaDias = Math.ceil(folga / 24);
+        const duracaoDias = Math.ceil(duracao / 24);
+        const bloqueioTotal = duracaoDias + folgaDias;
+
+        folgaCalc.textContent = `= ${folgaDias} dia(s)`;
+
+        exemploDiv.innerHTML =
+            `<i class="bi bi-calculator"></i> <strong>Exemplo:</strong> ` +
+            `Serviço no dia 07 → encerra dia ${7 + duracaoDias} → ` +
+            `bloqueado até dia ${7 + bloqueioTotal} → ` +
+            `<strong>próximo serviço: dia ${7 + bloqueioTotal + 1}</strong>. ` +
+            `| Pré-férias (início 15): bloqueado de dia ${15 - folgaDias} a 14. ` +
+            `| Pós-férias (retorno 27): bloqueado até dia ${27 + folgaDias - 1}, ` +
+            `<strong>primeiro serviço: dia ${27 + folgaDias}</strong>.`;
+    }
+
+    folgaInput.addEventListener('input', atualizar);
+    duracaoInput.addEventListener('input', atualizar);
+    atualizar();
+})();
+</script>
+{% endblock %}
