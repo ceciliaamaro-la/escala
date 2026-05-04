@@ -29,12 +29,23 @@
     <h6 class="fw-bold mb-2"><i class="bi bi-info-circle"></i> Como o algoritmo funciona</h6>
     <p class="mb-1 small">
       Os militares são organizados em uma <strong>matriz de posições</strong>.
-      Para cada dia do mês, o algoritmo escolhe o militar usando três critérios em ordem de prioridade:
+      A geração ocorre em <strong>duas passagens separadas</strong>, na ordem:
     </p>
-    <ol class="mb-2 small">
-      <li><strong>Menos serviços no mês</strong> — quem serviu menos vezes tem prioridade.</li>
-      <li><strong>Maior tempo sem servir</strong> — em caso de empate, quem está há mais dias sem escala é preferido.</li>
-      <li><strong>Posição na matriz (base → topo)</strong> — em caso de empate total, a leitura começa na <em>base</em> (mais moderno) e sobe até o <em>topo</em> (mais antigo).</li>
+    <ol class="mb-1 small">
+      <li class="mb-1">
+        <strong>1ª passagem — dias Pretos</strong> (dias úteis):
+        processa todos os dias úteis do mês de uma vez, do dia 1 ao último.
+      </li>
+      <li class="mb-2">
+        <strong>2ª passagem — dias Vermelhos/Roxos</strong> (fins de semana e feriados):
+        processa todos esses dias em seguida, com contadores zerados (reinicia a contagem para este grupo).
+      </li>
+    </ol>
+    <p class="mb-1 small">Dentro de cada passagem, para cada dia o algoritmo escolhe o militar por:</p>
+    <ol class="mb-2 small" type="a">
+      <li><strong>Menos serviços acumulados no grupo</strong> (Preto ou Vermelho) até aquele dia.</li>
+      <li><strong>Maior tempo sem servir no grupo</strong> — em caso de empate.</li>
+      <li><strong>Posição na matriz: base → topo</strong> — em caso de empate total, o mais moderno (base) tem prioridade.</li>
     </ol>
     <div class="d-flex gap-3 flex-wrap small">
       <span><span class="badge text-bg-success me-1">■</span> Escalado neste dia</span>

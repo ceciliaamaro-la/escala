@@ -84,6 +84,70 @@ def _ultimo_servico_col(matrix: List[List], i: int, ate_col: int) -> int:
     return ultimo
 
 
+def _gerar_grupo(
+    lista_militares: list,
+    dias_grupo: list,
+    dias_todos: list,
+    matrix: List[List],
+    n_m: int,
+) -> List[Tuple]:
+    """
+    Gera atribuições para um grupo de dias (ex: só Pretos ou só Vermelhos).
+    Usa a matrix compartilhada para registrar resultados, mas os contadores
+    de serviço e "último serviço" são calculados apenas dentro do próprio grupo.
+
+    dias_grupo : subconjunto de dias a processar nesta passagem
+    dias_todos : lista completa de dias do mês (para saber os índices na matrix)
+    """
+    # Mapear data → índice de coluna na matrix completa
+    col_por_data = {dia.data: j for j, dia in enumerate(dias_todos)}
+
+    resultado: List[Tuple] = []
+
+    # Contadores locais do grupo (para critérios 1 e 2)
+    count_grupo = [0] * n_m           # qtd de serviços no grupo até agora
+    ultimo_col_grupo = [-9999] * n_m  # índice da última col do grupo em que trabalhou
+
+    for pos, dia in enumerate(dias_grupo):
+        j = col_por_data[dia.data]  # coluna real na matrix
+
+        # Candidatos disponíveis neste dia
+        candidatos = [i for i in range(n_m) if matrix[i][j] != 'indisponivel']
+
+        if not candidatos:
+            resultado.append((dia, None))
+            continue
+
+        # Ordenação pelos critérios — usando acumuladores locais do grupo
+        candidatos.sort(key=lambda i: (
+            count_grupo[i],           # 1. menos serviços no grupo (ASC)
+            ultimo_col_grupo[i],      # 2. mais tempo atrás no grupo (ASC, -9999 = nunca)
+            -i,                       # 3. base→topo: índice maior primeiro
+        ))
+
+        # Evitar consecutivos dentro do grupo (restrição suave)
+        escolhido_idx = None
+        if pos > 0:
+            dia_anterior = dias_grupo[pos - 1]
+            j_ant = col_por_data[dia_anterior.data]
+            for i in candidatos:
+                if not isinstance(matrix[i][j_ant], date_type):
+                    escolhido_idx = i
+                    break
+            if escolhido_idx is None:
+                escolhido_idx = candidatos[0]
+        else:
+            escolhido_idx = candidatos[0]
+
+        # Registrar na matrix e atualizar acumuladores do grupo
+        matrix[escolhido_idx][j] = dia.data
+        count_grupo[escolhido_idx] += 1
+        ultimo_col_grupo[escolhido_idx] = j
+        resultado.append((dia, lista_militares[escolhido_idx]))
+
+    return resultado
+
+
 def gerar_escala_matriz(
     lista_militares: list,
     lista_dias: list,
@@ -92,9 +156,18 @@ def gerar_escala_matriz(
     """
     Executa o algoritmo de geração automática por matriz.
 
+    Os dias são processados em dois grupos, na ordem:
+      1. Dias "Pretos" (dias úteis comuns) — mês inteiro
+      2. Demais dias (Vermelhos, Roxos, feriados) — mês inteiro
+
+    Dentro de cada grupo, os critérios são:
+      a) menos serviços acumulados no próprio grupo
+      b) maior tempo desde o último serviço no grupo
+      c) posição na matriz: base → topo (índice maior primeiro)
+
     Returns:
-        Lista de tuplas (CalendarioDia, Militar | None) — uma por dia.
-        Militar é None quando nenhum candidato está disponível no dia.
+        Lista de tuplas (CalendarioDia, Militar | None), na ordem cronológica
+        original dos dias.
     """
     if not lista_militares or not lista_dias:
         return []
@@ -102,52 +175,28 @@ def gerar_escala_matriz(
     n_m = len(lista_militares)
     matrix = construir_matriz(lista_militares, lista_dias, indisponibilidades)
 
-    resultado: List[Tuple] = []
+    # Separar dias por grupo
+    # Grupo 1: cor mais escura / "Preto" — identificado pela cor #1a1a1a ou nome "Preto"
+    # Grupo 2: todos os demais (Vermelho, Roxo, feriados)
+    def _e_preto(dia) -> bool:
+        ts = dia.tipo_servico
+        nome = (ts.nome or '').lower()
+        cor = (ts.cor_hex or '').lower()
+        return 'pret' in nome or cor in ('#1a1a1a', '#000000', '#111111')
 
-    for j, dia in enumerate(lista_dias):
+    dias_pretos = [d for d in lista_dias if _e_preto(d)]
+    dias_outros = [d for d in lista_dias if not _e_preto(d)]
 
-        # --- Candidatos disponíveis neste dia ---
-        candidatos = [
-            i for i in range(n_m)
-            if matrix[i][j] != 'indisponivel'
-        ]
+    # Gerar grupo 1 (Pretos) depois grupo 2 (Vermelhos/Roxos)
+    res_pretos = _gerar_grupo(lista_militares, dias_pretos, lista_dias, matrix, n_m)
+    res_outros = _gerar_grupo(lista_militares, dias_outros, lista_dias, matrix, n_m)
 
-        if not candidatos:
-            resultado.append((dia, None))
-            continue
+    # Recompor resultado em ordem cronológica
+    mapa: dict = {}
+    for dia, mil in res_pretos + res_outros:
+        mapa[dia.data] = (dia, mil)
 
-        # --- Ordenação conforme as regras ---
-        # Convenção: menor ordem_hierarquica = mais antigo (topo da matriz)
-        #            maior ordem_hierarquica = mais moderno (base da matriz)
-        # A lista já está ordenada ASC por ordem_hierarquica:
-        #   índice 0  = mais antigo  = TOPO
-        #   índice -1 = mais moderno = BASE
-        # Leitura de baixo para cima → desempate prefere índice MAIOR (base)
-        candidatos.sort(key=lambda i: (
-            _contar_servicos_no_mes(matrix, i, j),   # 1. menos serviços (ASC)
-            _ultimo_servico_col(matrix, i, j),        # 2. mais tempo atrás (ASC)
-            -i,                                       # 3. base→topo: índice maior primeiro
-        ))
-
-        # --- Evitar consecutivos (restrição suave) ---
-        escolhido_idx = None
-        if j > 0:
-            # Preferir alguém que NÃO trabalhou no dia anterior
-            for i in candidatos:
-                if not isinstance(matrix[i][j - 1], date_type):
-                    escolhido_idx = i
-                    break
-            # Se não há alternativa (ex: 1 militar só), usa o melhor ranqueado
-            if escolhido_idx is None:
-                escolhido_idx = candidatos[0]
-        else:
-            escolhido_idx = candidatos[0]
-
-        # --- Registrar na matriz e no resultado ---
-        matrix[escolhido_idx][j] = dia.data
-        resultado.append((dia, lista_militares[escolhido_idx]))
-
-    return resultado
+    return [mapa[dia.data] for dia in lista_dias if dia.data in mapa]
 
 
 def obter_indisponibilidades(militares: list, data_inicio, data_fim) -> Dict[int, Set[date_type]]:
