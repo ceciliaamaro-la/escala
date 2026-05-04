@@ -1,0 +1,250 @@
+{% extends 'base.html' %}
+{% load escala_filters %}
+{% block titulo %}Matriz — {{ escala.tipo_escala.nome }} {{ nomes_meses|index:escala.mes }}/{{ escala.ano }}{% endblock %}
+
+{% block conteudo %}
+
+{# ── Cabeçalho ─────────────────────────────────────────────────────── #}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+  <div>
+    <h2 class="mb-0">
+      <i class="bi bi-grid-3x3"></i>
+      Matriz do Algoritmo
+    </h2>
+    <small class="text-muted">
+      {{ escala.tipo_escala.nome }} — {{ nomes_meses|index:escala.mes }}/{{ escala.ano }}
+      &mdash; {{ escala.organizacao_militar.sigla }}
+    </small>
+  </div>
+  <div class="d-flex gap-2 flex-wrap">
+    <a href="{% url 'escala_detalhar' escala.id %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left"></i> Voltar à Escala
+    </a>
+  </div>
+</div>
+
+{# ── Legenda do algoritmo ───────────────────────────────────────────── #}
+<div class="card border-0 bg-light mb-4">
+  <div class="card-body py-3">
+    <h6 class="fw-bold mb-2"><i class="bi bi-info-circle"></i> Como o algoritmo funciona</h6>
+    <p class="mb-1 small">
+      Os militares são organizados em uma <strong>matriz de posições</strong>.
+      Para cada dia do mês, o algoritmo escolhe o militar usando três critérios em ordem de prioridade:
+    </p>
+    <ol class="mb-2 small">
+      <li><strong>Menos serviços no mês</strong> — quem serviu menos vezes tem prioridade.</li>
+      <li><strong>Maior tempo sem servir</strong> — em caso de empate, quem está há mais dias sem escala é preferido.</li>
+      <li><strong>Posição na matriz (base → topo)</strong> — em caso de empate total, a leitura começa na <em>base</em> (mais moderno) e sobe até o <em>topo</em> (mais antigo).</li>
+    </ol>
+    <div class="d-flex gap-3 flex-wrap small">
+      <span><span class="badge text-bg-success me-1">■</span> Escalado neste dia</span>
+      <span><span class="badge text-bg-danger me-1">■</span> Indisponível (férias/licença/outros)</span>
+      <span><span class="badge bg-secondary me-1">■</span> Disponível mas não escolhido</span>
+    </div>
+  </div>
+</div>
+
+{% if not itens %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle"></i>
+  A escala ainda não foi gerada. Não há itens para exibir na matriz.
+  <a href="{% url 'escala_gerar' escala.id %}" class="alert-link">Gerar agora →</a>
+</div>
+{% else %}
+
+{# ── Matriz visual ─────────────────────────────────────────────────── #}
+<div class="card shadow-sm mb-4">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-table"></i> Matriz Militares × Dias</span>
+    <small class="text-muted">↑ TOPO (mais antigo) &nbsp;|&nbsp; ↓ BASE (mais moderno) &nbsp;|&nbsp; leitura: BASE → TOPO</small>
+  </div>
+  <div class="table-responsive" style="overflow-x:auto;">
+    <table class="table table-bordered table-sm mb-0 align-middle" style="min-width:900px; font-size:0.78rem;">
+      <thead class="table-dark">
+        <tr>
+          <th style="min-width:130px; position:sticky; left:0; background:#212529; z-index:2;">Militar</th>
+          <th style="min-width:60px;">Posto</th>
+          {% for dia in dias %}
+          <th class="text-center" style="min-width:32px; padding:2px 4px;">
+            {{ dia.data|date:"d" }}
+            <div class="text-muted" style="font-size:0.65rem; font-weight:normal;">{{ dia.data|date:"D"|slice:":3"|upper }}</div>
+          </th>
+          {% endfor %}
+          <th class="text-center" style="min-width:40px;">Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {# Renderiza de cima para baixo: TOPO (mais antigo) → BASE (mais moderno) #}
+        {% for row in matrix_rows %}
+        <tr>
+          <td style="position:sticky; left:0; background:#fff; z-index:1; font-weight:600;">
+            {{ row.militar.nome_guerra }}
+            {% if forloop.last %}
+              <span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;">BASE</span>
+            {% endif %}
+            {% if forloop.first %}
+              <span class="badge bg-info text-dark ms-1" style="font-size:0.6rem;">TOPO</span>
+            {% endif %}
+          </td>
+          <td class="text-muted" style="white-space:nowrap;">{{ row.militar.posto.sigla }}</td>
+          {% for cell in row.cells %}
+          <td class="text-center p-0" style="height:28px;">
+            {% if cell.serves %}
+              <span class="d-block w-100 h-100 d-flex align-items-center justify-content-center"
+                    style="background:#198754; color:#fff; font-size:0.7rem; font-weight:700;"
+                    title="{{ cell.dia.data|date:'d/m' }} — escalado">
+                {{ cell.dia.data|date:"d" }}
+              </span>
+            {% elif cell.unavailable %}
+              <span class="d-block w-100 h-100 d-flex align-items-center justify-content-center"
+                    style="background:#dc3545; color:#fff; font-size:0.65rem;"
+                    title="{{ cell.motivo }}">
+                ✕
+              </span>
+            {% else %}
+              <span class="d-block" style="background:#f8f9fa; height:28px;"></span>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td class="text-center fw-bold">
+            <span class="badge bg-primary rounded-pill">{{ row.total }}</span>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  {# ── Lista cronológica (modelo da imagem) ─────────────────────────── #}
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-list-ol"></i> Serviços — ordem cronológica
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm table-hover mb-0">
+          <thead class="table-secondary">
+            <tr>
+              <th>#</th>
+              <th>Data</th>
+              <th>Dia</th>
+              <th>Militar</th>
+              <th>Posto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for item in itens %}
+            <tr>
+              <td class="text-muted small">{{ forloop.counter }}</td>
+              <td class="fw-semibold">{{ item.calendario_dia.data|date:"d/m/Y" }}</td>
+              <td class="text-muted small">{{ item.calendario_dia.data|date:"D"|slice:":3"|upper }}</td>
+              <td><strong>{{ item.militar.nome_guerra }}</strong></td>
+              <td class="text-muted small">{{ item.militar.posto.sigla }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# ── Passo a passo do algoritmo ───────────────────────────────────── #}
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header fw-semibold">
+        <i class="bi bi-cpu"></i> Passo a passo do algoritmo
+        <small class="text-muted fw-normal ms-2">(decisão por dia)</small>
+      </div>
+      <div class="card-body p-0" style="max-height:600px; overflow-y:auto;">
+        <div class="accordion accordion-flush" id="accordionPassos">
+          {% for passo in passos %}
+          <div class="accordion-item">
+            <h2 class="accordion-header">
+              <button class="accordion-button collapsed py-2 px-3" type="button"
+                      data-bs-toggle="collapse"
+                      data-bs-target="#passo{{ forloop.counter }}"
+                      style="font-size:0.85rem;">
+                <span class="me-2 fw-bold" style="min-width:80px;">
+                  {{ passo.dia.data|date:"d/m (D)" }}
+                </span>
+                {% if passo.escolhido %}
+                  <span class="badge text-bg-success me-2">{{ passo.escolhido.nome_guerra }}</span>
+                  <span class="text-muted small">{{ passo.escolhido.posto.sigla }}</span>
+                {% else %}
+                  <span class="badge text-bg-danger">Sem militar disponível</span>
+                {% endif %}
+              </button>
+            </h2>
+            <div id="passo{{ forloop.counter }}" class="accordion-collapse collapse">
+              <div class="accordion-body py-2 px-3" style="font-size:0.82rem;">
+
+                {# Candidatos disponíveis #}
+                {% if passo.candidatos %}
+                <p class="mb-1 fw-semibold text-muted">Candidatos disponíveis (já ordenados):</p>
+                <table class="table table-xs table-sm table-bordered mb-2" style="font-size:0.78rem;">
+                  <thead class="table-light">
+                    <tr>
+                      <th>Pos.</th>
+                      <th>Militar</th>
+                      <th>Posto</th>
+                      <th title="Serviços no mês até este dia">Serv.</th>
+                      <th title="Dias desde o último serviço">Dias s/ servir</th>
+                      <th>Escolhido?</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for c in passo.candidatos %}
+                    <tr {% if c.escolhido %}class="table-success fw-bold"{% endif %}>
+                      <td>{{ forloop.counter }}º</td>
+                      <td>{{ c.militar.nome_guerra }}</td>
+                      <td class="text-muted">{{ c.militar.posto.sigla }}</td>
+                      <td class="text-center">{{ c.count }}</td>
+                      <td class="text-center">
+                        {% if c.dias_desde %}{{ c.dias_desde }}{% else %}<em class="text-muted">nunca serviu</em>{% endif %}
+                      </td>
+                      <td class="text-center">
+                        {% if c.escolhido %}
+                          <i class="bi bi-check-circle-fill text-success"></i>
+                        {% else %}—{% endif %}
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+                {% endif %}
+
+                {# Indisponíveis #}
+                {% if passo.indisponiveis %}
+                <p class="mb-1 fw-semibold text-danger">Indisponíveis neste dia:</p>
+                <ul class="list-unstyled mb-0 small">
+                  {% for ind in passo.indisponiveis %}
+                  <li>
+                    <i class="bi bi-x-circle text-danger"></i>
+                    <strong>{{ ind.militar.nome_guerra }}</strong>
+                    ({{ ind.militar.posto.sigla }}) — {{ ind.motivo }}
+                  </li>
+                  {% endfor %}
+                </ul>
+                {% endif %}
+
+                {% if not passo.candidatos and not passo.indisponiveis %}
+                <p class="text-muted mb-0"><em>Sem militares cadastrados.</em></p>
+                {% endif %}
+
+              </div>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endif %}
+
+{% endblock %}

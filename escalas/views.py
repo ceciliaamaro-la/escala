@@ -7,7 +7,7 @@ Especialidades, Militares). As views de geração de escala estão em
 Suporta múltiplas OMs: a OM ativa é mantida na sessão do usuário
 (`request.session['om_id_ativa']`) e selecionada via dropdown na navbar.
 """
-from datetime import date as _date, date
+from datetime import date as _date, date, timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -1165,3 +1165,135 @@ def escala_publicar(request, escala_id):
     except Exception as e:
         messages.error(request, str(e))
     return redirect('escala_detalhar', escala_id=escala_id)
+
+
+@login_required
+def escala_matriz(request, escala_id):
+    """Visualização da matriz algoritmo: militares × dias + passo a passo."""
+    escala = get_object_or_404(Escala, pk=escala_id)
+    om = escala.organizacao_militar  # usa a OM da própria escala (igual ao escala_detalhar)
+
+    # Militares ordenados ASC: índice 0 = mais antigo (topo), último = mais moderno (base)
+    militares = list(
+        Militar.objects.filter(organizacao_militar=om, ativo=True)
+        .select_related('posto')
+        .order_by('posto__ordem_hierarquica', 'nome_guerra')
+    )
+
+    # Dias do calendário do mês
+    dias = list(
+        CalendarioDia.objects.filter(
+            organizacao_militar=om,
+            data__year=escala.ano,
+            data__month=escala.mes,
+        ).select_related('tipo_servico').order_by('data')
+    )
+
+    # Mapa de itens salvos: data → militar
+    itens = list(
+        escala.itens.select_related('militar__posto', 'calendario_dia__tipo_servico')
+        .order_by('calendario_dia__data')
+    )
+    itens_map = {item.calendario_dia.data: item.militar for item in itens}
+
+    # Indisponibilidades do período
+    import calendar as _cal
+    ultimo_dia_num = _cal.monthrange(escala.ano, escala.mes)[1]
+    inicio = date(escala.ano, escala.mes, 1)
+    fim = date(escala.ano, escala.mes, ultimo_dia_num)
+
+    indisp_map = {}  # (militar_id, data) → motivo (str)
+    for ind in (
+        Indisponibilidade.objects.filter(
+            militar__organizacao_militar=om,
+            data_inicio__lte=fim,
+            data_fim__gte=inicio,
+        )
+        .select_related('militar', 'tipo')
+    ):
+        d = ind.data_inicio
+        while d <= ind.data_fim:
+            if inicio <= d <= fim:
+                indisp_map[(ind.militar_id, d)] = ind.tipo.nome
+            d += timedelta(days=1)
+
+    # ── Construir linhas da matriz ──────────────────────────────────────
+    # Tabela visual: topo = mais antigo (ordem menor), base = mais moderno (ordem maior)
+    # Iteramos militares em ordem ASC (mais antigo primeiro = topo da tabela HTML)
+    # e invertemos para exibir de baixo para cima no template via CSS flex-direction:column-reverse
+
+    matrix_rows = []
+    for mil in militares:
+        cells = []
+        total_servicos = 0
+        for dia in dias:
+            d = dia.data
+            serves = itens_map.get(d) == mil
+            unavailable = (mil.id, d) in indisp_map
+            motivo_indisp = indisp_map.get((mil.id, d), '')
+            if serves:
+                total_servicos += 1
+            cells.append({
+                'dia': dia,
+                'serves': serves,
+                'unavailable': unavailable,
+                'motivo': motivo_indisp,
+            })
+        matrix_rows.append({
+            'militar': mil,
+            'cells': cells,
+            'total': total_servicos,
+        })
+
+    # ── Passo a passo: reconstruir raciocínio por dia ───────────────────
+    contagem = {mil.id: 0 for mil in militares}
+    ultimo_serv = {mil.id: None for mil in militares}
+    passos = []
+
+    for dia in dias:
+        d = dia.data
+        escolhido = itens_map.get(d)
+
+        candidatos = []
+        indisponiveis = []
+        for mil in militares:
+            if (mil.id, d) in indisp_map:
+                indisponiveis.append({'militar': mil, 'motivo': indisp_map[(mil.id, d)]})
+            else:
+                ult = ultimo_serv[mil.id]
+                dias_desde = (d - ult).days if ult else None
+                candidatos.append({
+                    'militar': mil,
+                    'count': contagem[mil.id],
+                    'dias_desde': dias_desde,
+                    'escolhido': mil == escolhido,
+                })
+
+        # Ordenar candidatos pela mesma lógica do engine (para exibição)
+        candidatos.sort(key=lambda c: (
+            c['count'],
+            -(c['dias_desde'] if c['dias_desde'] is not None else 9999),
+            -militares.index(c['militar']),  # base→topo
+        ))
+
+        # Atualizar acumuladores APÓS montar o passo
+        if escolhido:
+            contagem[escolhido.id] += 1
+            ultimo_serv[escolhido.id] = d
+
+        passos.append({
+            'dia': dia,
+            'escolhido': escolhido,
+            'candidatos': candidatos,
+            'indisponiveis': indisponiveis,
+        })
+
+    return render(request, 'escala/matriz.html', {
+        'escala': escala,
+        'militares': militares,
+        'dias': dias,
+        'matrix_rows': matrix_rows,
+        'passos': passos,
+        'itens': itens,
+        'nomes_meses': NOMES_MESES,
+    })

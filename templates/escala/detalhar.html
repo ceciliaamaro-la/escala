@@ -48,6 +48,11 @@
             </form>
             {% endif %}
         {% endif %}
+        {% if itens %}
+        <a href="{% url 'escala_matriz' escala.id %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-grid-3x3"></i> Ver Matriz
+        </a>
+        {% endif %}
         <a href="{% url 'escala_listar' %}" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrow-left"></i> Voltar
         </a>
