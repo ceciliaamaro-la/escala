@@ -11,19 +11,26 @@ Valores possíveis por célula:
   'indisponivel' → indisponível (não pode ser escalado)
   None           → disponível
 
-Algoritmo por coluna (dia):
+Algoritmo por coluna (dia), processados em ORDEM CRONOLÓGICA:
   1. Filtrar militares disponíveis (célula != 'indisponivel')
   2. Ordenar por:
-       a) menor qtd de serviços já atribuídos no mês (ASC)
-       b) maior tempo desde o último serviço, i.e., menor índice do último dia
-          em que trabalhou (ASC)
-       c) posição na matriz de baixo para cima, i.e., menor índice = mais
-          moderno (ASC)
+       a) menor qtd de serviços totais já atribuídos no mês (ASC) — contador único
+       b) maior tempo desde o último serviço (ASC, -9999 = nunca)
+       c) posição na matriz de baixo para cima (índice maior = mais antigo = prioridade)
   3. Evitar dias consecutivos: se o melhor candidato trabalhou no dia anterior,
      tentar o próximo; só volta ao melhor se não houver alternativa.
   4. Alocar o escolhido e registrar a data na célula correspondente.
-  5. Marcar células de folga do escolhido como 'indisponivel' na matriz
-     (regra de folga mínima entre serviços).
+  5. Marcar células de folga pós-serviço como 'indisponivel' na matrix.
+     Regra: serviço no dia D, duração S dias → folga de F dias após saída.
+     Bloqueado: D+1 .. D+S+F  (inclusive ambos os extremos).
+     Pode servir novamente: D+S+F+1.
+
+Exemplo com duração=1 dia e folga=2 dias:
+  Entra dia 02, sai dia 03 → bloqueado 03, 04 → pode servir em 05? Não.
+  Saiu dia 03 (09h) + 48h = dia 05 (09h) ainda em folga → LIVRE dia 06.
+  Portanto bloqueados: 03, 04, 05 → pode servir em 06.
+  janela = duracao_servico_dias + folga_minima_dias = 1 + 2 = 3
+  Bloqueados: j+1 .. j+3 (3 células após o serviço).
 """
 
 from datetime import date as date_type, timedelta
@@ -31,7 +38,7 @@ from typing import List, Optional, Tuple, Dict, Set
 
 
 # ---------------------------------------------------------------------------
-# Tipo de linha da matriz
+# Tipo de célula da matriz
 # ---------------------------------------------------------------------------
 CelulaMatriz = Optional[date_type]   # None | date | 'indisponivel'
 
@@ -66,104 +73,6 @@ def construir_matriz(
     return matrix
 
 
-def _contar_servicos_no_mes(matrix: List[List], i: int, ate_col: int) -> int:
-    """Conta serviços atribuídos ao militar i nas colunas 0..ate_col-1."""
-    return sum(
-        1 for k in range(ate_col) if isinstance(matrix[i][k], date_type)
-    )
-
-
-def _ultimo_servico_col(matrix: List[List], i: int, ate_col: int) -> int:
-    """
-    Retorna o índice da última coluna em que o militar i trabalhou
-    (antes da coluna atual). Retorna -9999 se nunca trabalhou
-    (= prioridade máxima na segunda chave de ordenação).
-    """
-    ultimo = -9999
-    for k in range(ate_col):
-        if isinstance(matrix[i][k], date_type):
-            ultimo = k
-    return ultimo
-
-
-def _gerar_grupo(
-    lista_militares: list,
-    dias_grupo: list,
-    dias_todos: list,
-    matrix: List[List],
-    n_m: int,
-    janela_folga_dias: int = 0,
-) -> List[Tuple]:
-    """
-    Gera atribuições para um grupo de dias (ex: só Pretos ou só Vermelhos).
-    Usa a matrix compartilhada para registrar resultados, mas os contadores
-    de serviço e "último serviço" são calculados apenas dentro do próprio grupo.
-
-    Após cada atribuição, marca os dias de folga subsequentes como
-    'indisponivel' na matrix (regra de folga mínima entre serviços).
-
-    dias_grupo      : subconjunto de dias a processar nesta passagem
-    dias_todos      : lista completa de dias do mês (para saber os índices na matrix)
-    janela_folga_dias: duração_serviço_dias + folga_minima_dias; 0 = desativado
-    """
-    # Mapear data → índice de coluna na matrix completa
-    col_por_data = {dia.data: j for j, dia in enumerate(dias_todos)}
-    n_d = len(dias_todos)
-
-    resultado: List[Tuple] = []
-
-    # Contadores locais do grupo (para critérios 1 e 2)
-    count_grupo = [0] * n_m           # qtd de serviços no grupo até agora
-    ultimo_col_grupo = [-9999] * n_m  # índice da última col do grupo em que trabalhou
-
-    for pos, dia in enumerate(dias_grupo):
-        j = col_por_data[dia.data]  # coluna real na matrix
-
-        # Candidatos disponíveis neste dia
-        candidatos = [i for i in range(n_m) if matrix[i][j] != 'indisponivel']
-
-        if not candidatos:
-            resultado.append((dia, None))
-            continue
-
-        # Ordenação pelos critérios — usando acumuladores locais do grupo
-        candidatos.sort(key=lambda i: (
-            count_grupo[i],           # 1. menos serviços no grupo (ASC)
-            ultimo_col_grupo[i],      # 2. mais tempo atrás no grupo (ASC, -9999 = nunca)
-            -i,                       # 3. base→topo: índice maior primeiro
-        ))
-
-        # Evitar consecutivos dentro do grupo (restrição suave)
-        escolhido_idx = None
-        if pos > 0:
-            dia_anterior = dias_grupo[pos - 1]
-            j_ant = col_por_data[dia_anterior.data]
-            for i in candidatos:
-                if not isinstance(matrix[i][j_ant], date_type):
-                    escolhido_idx = i
-                    break
-            if escolhido_idx is None:
-                escolhido_idx = candidatos[0]
-        else:
-            escolhido_idx = candidatos[0]
-
-        # Registrar na matrix e atualizar acumuladores do grupo
-        matrix[escolhido_idx][j] = dia.data
-        count_grupo[escolhido_idx] += 1
-        ultimo_col_grupo[escolhido_idx] = j
-        resultado.append((dia, lista_militares[escolhido_idx]))
-
-        # ── Marcar folga mínima pós-serviço na matrix ──────────────────────
-        # Bloqueia dias j+1 até j+janela_folga_dias para o militar escolhido,
-        # desde que a célula ainda esteja livre (None).
-        if janela_folga_dias > 0:
-            for k in range(j + 1, min(j + janela_folga_dias + 1, n_d)):
-                if matrix[escolhido_idx][k] is None:
-                    matrix[escolhido_idx][k] = 'indisponivel'
-
-    return resultado
-
-
 def gerar_escala_matriz(
     lista_militares: list,
     lista_dias: list,
@@ -173,58 +82,85 @@ def gerar_escala_matriz(
     """
     Executa o algoritmo de geração automática por matriz.
 
-    Os dias são processados em dois grupos, na ordem:
-      1. Dias "Pretos" (dias úteis comuns) — mês inteiro
-      2. Demais dias (Vermelhos, Roxos, feriados) — mês inteiro
+    Todos os dias são processados em ORDEM CRONOLÓGICA (não por tipo).
+    O balanceamento usa um CONTADOR ÚNICO por militar (Preto + Vermelho juntos).
 
-    Dentro de cada grupo, os critérios são:
-      a) menos serviços acumulados no próprio grupo
-      b) maior tempo desde o último serviço no grupo
-      c) posição na matriz: base → topo (índice maior primeiro)
-
-    Após cada atribuição, marca os dias de folga na matrix (regra de folga
-    mínima entre serviços), afetando ambos os grupos.
+    A janela de bloqueio pós-serviço é:
+        janela = duracao_servico_dias + folga_minima_dias
+        Bloqueados: j+1 .. j+janela  (inclusive)
+        Próximo serviço possível: j + janela + 1
 
     Args:
-        config: instância de ConfiguracaoEscala (opcional). Se None, usa padrão 0 (sem folga).
+        config: instância de ConfiguracaoEscala (opcional). Se None, sem folga.
 
     Returns:
-        Lista de tuplas (CalendarioDia, Militar | None), na ordem cronológica
-        original dos dias.
+        Lista de tuplas (CalendarioDia, Militar | None), ordem cronológica.
     """
     if not lista_militares or not lista_dias:
         return []
 
     n_m = len(lista_militares)
+    n_d = len(lista_dias)
     matrix = construir_matriz(lista_militares, lista_dias, indisponibilidades)
 
-    # Calcular janela de folga para marcar na matrix após cada serviço
+    # Janela de bloqueio pós-serviço
+    # duracao=1, folga=2 → janela=3 → bloqueia j+1, j+2, j+3 → livre em j+4
     if config is not None:
         janela_folga_dias = config.duracao_servico_dias + config.folga_minima_dias
     else:
-        janela_folga_dias = 0  # sem regra de folga (compatibilidade retroativa)
+        janela_folga_dias = 0
 
-    # Separar dias por grupo
-    def _e_preto(dia) -> bool:
-        ts = dia.tipo_servico
-        nome = (ts.nome or '').lower()
-        cor = (ts.cor_hex or '').lower()
-        return 'pret' in nome or cor in ('#1a1a1a', '#000000', '#111111')
+    # Mapear data → índice de coluna
+    col_por_data = {dia.data: j for j, dia in enumerate(lista_dias)}
 
-    dias_pretos = [d for d in lista_dias if _e_preto(d)]
-    dias_outros = [d for d in lista_dias if not _e_preto(d)]
+    # Contadores globais por militar (únicos, independem do tipo do dia)
+    count_total = [0] * n_m          # total de serviços atribuídos no mês
+    ultimo_col = [-9999] * n_m       # índice da última coluna em que trabalhou
 
-    # Gerar grupo 1 (Pretos) depois grupo 2 (Vermelhos/Roxos)
-    # A matrix é compartilhada: folgas marcadas no grupo 1 afetam o grupo 2
-    res_pretos = _gerar_grupo(lista_militares, dias_pretos, lista_dias, matrix, n_m, janela_folga_dias)
-    res_outros = _gerar_grupo(lista_militares, dias_outros, lista_dias, matrix, n_m, janela_folga_dias)
+    resultado: List[Tuple] = []
 
-    # Recompor resultado em ordem cronológica
-    mapa: dict = {}
-    for dia, mil in res_pretos + res_outros:
-        mapa[dia.data] = (dia, mil)
+    for j, dia in enumerate(lista_dias):
+        # Candidatos disponíveis neste dia
+        candidatos = [i for i in range(n_m) if matrix[i][j] != 'indisponivel']
 
-    return [mapa[dia.data] for dia in lista_dias if dia.data in mapa]
+        if not candidatos:
+            resultado.append((dia, None))
+            continue
+
+        # Ordenação pelos critérios usando contadores globais
+        candidatos.sort(key=lambda i: (
+            count_total[i],    # 1. menos serviços totais no mês (ASC)
+            ultimo_col[i],     # 2. maior tempo desde último serviço (ASC, -9999=nunca)
+            -i,                # 3. base→topo: índice maior = mais antigo = prioridade
+        ))
+
+        # Evitar dias consecutivos (restrição suave)
+        escolhido_idx = None
+        dia_anterior_data = dia.data - timedelta(days=1)
+        if dia_anterior_data in col_por_data:
+            j_ant = col_por_data[dia_anterior_data]
+            for i in candidatos:
+                if not isinstance(matrix[i][j_ant], date_type):
+                    escolhido_idx = i
+                    break
+        if escolhido_idx is None:
+            escolhido_idx = candidatos[0]
+
+        # Registrar na matrix e atualizar contadores globais
+        matrix[escolhido_idx][j] = dia.data
+        count_total[escolhido_idx] += 1
+        ultimo_col[escolhido_idx] = j
+        resultado.append((dia, lista_militares[escolhido_idx]))
+
+        # ── Marcar folga mínima pós-serviço ────────────────────────────────
+        # Bloqueia j+1 .. j+janela_folga_dias (inclusive).
+        # Sobrescreve None; células já marcadas (indisponivel ou data) ficam.
+        if janela_folga_dias > 0:
+            for k in range(j + 1, min(j + janela_folga_dias + 1, n_d)):
+                if matrix[escolhido_idx][k] is None:
+                    matrix[escolhido_idx][k] = 'indisponivel'
+
+    return resultado
 
 
 def obter_indisponibilidades(
@@ -239,21 +175,24 @@ def obter_indisponibilidades(
 
     Aplica (conforme ConfiguracaoEscala):
       1. Indisponibilidades diretas (férias, licença, etc.)
-      2. Folga mínima entre serviços (baseada em EscalaItems do mês anterior)
-      3. Bloqueio pré-férias: janela antes do início de uma indisponibilidade
-      4. Bloqueio pós-férias: janela após o término de uma indisponibilidade
+      2. Bloqueio pré-férias: janela antes do início de uma indisponibilidade
+      3. Bloqueio pós-férias: janela após o término de uma indisponibilidade
+      4. Folga mínima pós-serviço inter-mês (serviços do mês anterior)
+
+    Regras de bloqueio pós-serviço DENTRO do mês são tratadas pela matrix
+    em gerar_escala_matriz (processamento cronológico em tempo real).
 
     Args:
-        militares : lista de objetos Militar
-        data_inicio, data_fim : intervalo do mês a gerar
-        config    : ConfiguracaoEscala (opcional). Se None, busca do banco ou usa padrão.
+        militares   : lista de objetos Militar
+        data_inicio : primeiro dia do mês a gerar
+        data_fim    : último dia do mês a gerar
+        config      : ConfiguracaoEscala (opcional)
     """
     from .models import Indisponibilidade, EscalaItem
 
     if not militares:
         return {}
 
-    # Obter configuração se não fornecida
     if config is None:
         from .models import ConfiguracaoEscala
         om = militares[0].organizacao_militar
@@ -261,13 +200,14 @@ def obter_indisponibilidades(
 
     folga_min_dias = config.folga_minima_dias
     duracao_dias = config.duracao_servico_dias
-    janela_total = duracao_dias + folga_min_dias  # dias bloqueados após início do serviço
+    # Janela total: dias bloqueados APÓS o dia do serviço
+    # (igual à janela usada na matrix)
+    janela_total = duracao_dias + folga_min_dias
 
     militar_ids = [m.id for m in militares]
     resultado: Dict[int, Set[date_type]] = {}
 
-    # ── 1. Indisponibilidades diretas ───────────────────────────────────────
-    # Busca com margem extra para capturar registros que afetam pré/pós bloqueio
+    # ── 1+2+3. Indisponibilidades diretas + bloqueios pré/pós ──────────────
     margem = timedelta(days=janela_total)
     registros = Indisponibilidade.objects.filter(
         militar_id__in=militar_ids,
@@ -287,33 +227,31 @@ def obter_indisponibilidades(
                 resultado[militar_id].add(cursor)
             cursor += timedelta(days=1)
 
-        # ── 2. Bloqueio pré-férias ──────────────────────────────────────────
-        # Serviços nos últimos folga_min_dias antes da indisponibilidade
-        # terminariam dentro da janela de folga que sobrepõe o início das férias.
-        # Bloqueia: [ini - folga_min_dias, ini - 1]
+        # ── Bloqueio pré-férias ─────────────────────────────────────────────
+        # Um serviço nos folga_min_dias antes do início das férias causaria
+        # violação da folga mínima. Bloqueia: [ini - folga_min_dias, ini - 1]
         if config.bloquear_pre_ferias:
-            bloquear_pre_inicio = ini - timedelta(days=folga_min_dias)
-            bloquear_pre_fim = ini - timedelta(days=1)
-            cursor = max(data_inicio, bloquear_pre_inicio)
-            while cursor <= min(data_fim, bloquear_pre_fim):
+            pre_inicio = ini - timedelta(days=folga_min_dias)
+            pre_fim = ini - timedelta(days=1)
+            cursor = max(data_inicio, pre_inicio)
+            while cursor <= min(data_fim, pre_fim):
                 resultado[militar_id].add(cursor)
                 cursor += timedelta(days=1)
 
-        # ── 3. Bloqueio pós-férias ──────────────────────────────────────────
-        # Após retorno (fim + 1), o militar precisa de folga_min_dias antes
-        # de assumir novo serviço.
+        # ── Bloqueio pós-férias ─────────────────────────────────────────────
+        # Após retorno (fim+1), o militar ainda precisa de folga_min_dias.
         # Bloqueia: [fim + 1, fim + folga_min_dias]
         if config.bloquear_pos_ferias:
-            bloquear_pos_inicio = fim + timedelta(days=1)
-            bloquear_pos_fim = fim + timedelta(days=folga_min_dias)
-            cursor = max(data_inicio, bloquear_pos_inicio)
-            while cursor <= min(data_fim, bloquear_pos_fim):
+            pos_inicio = fim + timedelta(days=1)
+            pos_fim = fim + timedelta(days=folga_min_dias)
+            cursor = max(data_inicio, pos_inicio)
+            while cursor <= min(data_fim, pos_fim):
                 resultado[militar_id].add(cursor)
                 cursor += timedelta(days=1)
 
-    # ── 4. Folga mínima pós-serviço (inter-mês) ────────────────────────────
-    # Busca serviços de meses anteriores que ainda "bloqueiam" o início do mês.
-    # Janela de lookback: janela_total dias antes de data_inicio.
+    # ── 4. Folga mínima pós-serviço inter-mês ──────────────────────────────
+    # Serviços no final do mês anterior que ainda bloqueiam o início deste mês.
+    # Busca janela_total dias antes de data_inicio.
     lookback = data_inicio - timedelta(days=janela_total)
     items_anteriores = EscalaItem.objects.filter(
         militar_id__in=militar_ids,
@@ -324,11 +262,11 @@ def obter_indisponibilidades(
     for militar_id, data_servico in items_anteriores:
         if militar_id not in resultado:
             resultado[militar_id] = set()
-        # Bloqueio: [data_servico + 1, data_servico + janela_total]
+        # Bloqueado: data_servico+1 .. data_servico+janela_total
         bloquear_inicio = data_servico + timedelta(days=1)
-        bloquear_fim_inter = data_servico + timedelta(days=janela_total)
+        bloquear_fim = data_servico + timedelta(days=janela_total)
         cursor = max(data_inicio, bloquear_inicio)
-        while cursor <= min(data_fim, bloquear_fim_inter):
+        while cursor <= min(data_fim, bloquear_fim):
             resultado[militar_id].add(cursor)
             cursor += timedelta(days=1)
 
