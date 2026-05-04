@@ -117,10 +117,16 @@ def gerar_escala_matriz(
             continue
 
         # --- Ordenação conforme as regras ---
+        # Convenção: menor ordem_hierarquica = mais antigo (topo da matriz)
+        #            maior ordem_hierarquica = mais moderno (base da matriz)
+        # A lista já está ordenada ASC por ordem_hierarquica:
+        #   índice 0  = mais antigo  = TOPO
+        #   índice -1 = mais moderno = BASE
+        # Leitura de baixo para cima → desempate prefere índice MAIOR (base)
         candidatos.sort(key=lambda i: (
             _contar_servicos_no_mes(matrix, i, j),   # 1. menos serviços (ASC)
             _ultimo_servico_col(matrix, i, j),        # 2. mais tempo atrás (ASC)
-            i,                                        # 3. mais moderno first (ASC)
+            -i,                                       # 3. base→topo: índice maior primeiro
         ))
 
         # --- Evitar consecutivos (restrição suave) ---
