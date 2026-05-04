@@ -1239,9 +1239,12 @@ def escala_matriz(request, escala_id):
                 'unavailable': unavailable,
                 'motivo': motivo_indisp,
             })
+        # eventos: só dias em que serviu ou estava indisponível (para colunas da tabela)
+        eventos = [c for c in cells if c['serves'] or c['unavailable']]
         matrix_rows.append({
             'militar': mil,
             'cells': cells,
+            'eventos': eventos,
             'total': total_servicos,
         })
 
@@ -1288,11 +1291,19 @@ def escala_matriz(request, escala_id):
             'indisponiveis': indisponiveis,
         })
 
+    max_eventos = max((len(r['eventos']) for r in matrix_rows), default=0)
+    # Padear cada linha com None até max_eventos para facilitar o template
+    for r in matrix_rows:
+        faltam = max_eventos - len(r['eventos'])
+        r['eventos_padded'] = r['eventos'] + [None] * faltam
+
     return render(request, 'escala/matriz.html', {
         'escala': escala,
         'militares': militares,
         'dias': dias,
         'matrix_rows': matrix_rows,
+        'max_eventos': max_eventos,
+        'max_eventos_range': range(max_eventos),
         'passos': passos,
         'itens': itens,
         'nomes_meses': NOMES_MESES,
