@@ -400,6 +400,16 @@ class Militar(models.Model):
         help_text="Data de nascimento"
     )
     
+    # Vínculo com usuário do sistema (login próprio do militar)
+    user = models.OneToOneField(
+        'escalas.UsuarioCustomizado',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='militar',
+        help_text="Usuário Django vinculado a este militar (para auto-serviço)"
+    )
+
     # Status
     ativo = models.BooleanField(
         default=True,

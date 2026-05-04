@@ -7,6 +7,7 @@ from django.core.exceptions import ValidationError
 from .models import (
     Divisao,
     Especialidade,
+    Indisponibilidade,
     Militar,
     OrganizacaoMilitar,
     Posto,
@@ -271,3 +272,53 @@ class EscalaCriarForm(BootstrapFormMixin, forms.Form):
         hoje = date.today()
         self.fields['mes'].initial = hoje.month
         self.fields['ano'].initial = hoje.year
+
+
+# ---------------------------------------------------------------------------
+# Indisponibilidade — registro pelo escalante ou pelo próprio militar
+# ---------------------------------------------------------------------------
+
+class IndisponibilidadeRegistrarForm(BootstrapFormMixin, forms.ModelForm):
+    """
+    Formulário para registrar indisponibilidade.
+    - Escalante: campo `militar` é um dropdown filtrado pela OM.
+    - Militar logado: campo `militar` é ocultado (preenchido automaticamente).
+    """
+
+    class Meta:
+        model = Indisponibilidade
+        fields = ['militar', 'tipo', 'data_inicio', 'data_fim', 'observacao']
+        widgets = {
+            'data_inicio': forms.DateInput(attrs={'type': 'date'}),
+            'data_fim': forms.DateInput(attrs={'type': 'date'}),
+            'observacao': forms.Textarea(attrs={'rows': 2}),
+        }
+        labels = {
+            'militar': 'Militar',
+            'tipo': 'Tipo de indisponibilidade',
+            'data_inicio': 'Data de início',
+            'data_fim': 'Data de fim',
+            'observacao': 'Observação (opcional)',
+        }
+
+    def __init__(self, *args, om=None, militar_fixo=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['tipo'].queryset = TipoIndisponibilidade.objects.filter(ativo=True)
+        if om:
+            self.fields['militar'].queryset = (
+                Militar.objects.filter(organizacao_militar=om, ativo=True)
+                .select_related('posto')
+                .order_by('posto__ordem_hierarquica', 'nome_guerra')
+            )
+        if militar_fixo:
+            self.fields['militar'].initial = militar_fixo
+            self.fields['militar'].widget = forms.HiddenInput()
+            self.fields['militar'].required = False
+
+    def clean(self):
+        cleaned = super().clean()
+        ini = cleaned.get('data_inicio')
+        fim = cleaned.get('data_fim')
+        if ini and fim and fim < ini:
+            raise ValidationError('Data de fim não pode ser anterior à data de início.')
+        return cleaned

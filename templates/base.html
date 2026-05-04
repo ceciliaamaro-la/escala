@@ -59,10 +59,19 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if 'tipo_indisponibilidade' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'tipo_indisponibilidade_listar' %}">
-                            <i class="bi bi-calendar-x"></i> Indisponibilidades
+                        <a class="nav-link {% if 'indisponibilidade' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'indisponibilidade_listar' %}">
+                            <i class="bi bi-calendar-x"></i>
+                            {% if militar_do_usuario %}Minha Indisponib.{% else %}Indisponibilidades{% endif %}
                         </a>
                     </li>
+                    {% if not militar_do_usuario %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'tipo_indisponibilidade' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'tipo_indisponibilidade_listar' %}">
+                            <i class="bi bi-tags"></i> Tipos Indisp.
+                        </a>
+                    </li>
+                    {% endif %}
                     <li class="nav-item">
                         <a class="nav-link {% if 'escala' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'escala_listar' %}">
                             <i class="bi bi-calendar2-week"></i> Escalas

@@ -21,6 +21,7 @@ from .forms_cadastro import (
     DivisaoForm,
     EscalaCriarForm,
     EspecialidadeForm,
+    IndisponibilidadeRegistrarForm,
     MilitarForm,
     OrganizacaoMilitarForm,
     PostoForm,
@@ -757,6 +758,32 @@ def quadrinho_visao(request):
 
     anos_opcoes = list(range(ano_atual + 1, ano_atual - 5, -1))
 
+    # Escala atual do mês/ano para exibir links de Matriz e Detalhe no quadrinho
+    from datetime import date as _d
+    hoje = _d.today()
+    escala_atual = None
+    if om and tipo_escala_atual:
+        escala_atual = (
+            Escala.objects.filter(
+                organizacao_militar=om,
+                tipo_escala=tipo_escala_atual,
+                ano=ano,
+                mes=hoje.month,
+            )
+            .order_by('-data_criacao')
+            .first()
+        )
+        if escala_atual is None:
+            escala_atual = (
+                Escala.objects.filter(
+                    organizacao_militar=om,
+                    tipo_escala=tipo_escala_atual,
+                    ano=ano,
+                )
+                .order_by('-mes', '-data_criacao')
+                .first()
+            )
+
     return render(
         request,
         'cadastro/quadrinho_visao.html',
@@ -771,8 +798,96 @@ def quadrinho_visao(request):
             'totais_coluna': totais_coluna_lista,
             'total_geral': total_geral,
             'ordem': ordem,
+            'escala_atual': escala_atual,
         },
     )
+
+
+# ---------------------------------------------------------------------------
+# Indisponibilidades — auto-serviço do militar e gestão pelo escalante
+# ---------------------------------------------------------------------------
+
+@login_required
+def indisponibilidade_listar(request):
+    om = obter_om_ativa(request)
+    militar_proprio = getattr(request.user, 'militar', None)
+
+    if militar_proprio:
+        indisp = (
+            Indisponibilidade.objects.filter(militar=militar_proprio)
+            .select_related('tipo', 'militar__posto')
+            .order_by('-data_inicio')
+        )
+        militares = None
+        filtro_mil = None
+    else:
+        indisp = (
+            Indisponibilidade.objects.filter(militar__organizacao_militar=om)
+            .select_related('tipo', 'militar__posto')
+            .order_by('-data_inicio')
+        )
+        militares = (
+            Militar.objects.filter(organizacao_militar=om, ativo=True)
+            .select_related('posto')
+            .order_by('posto__ordem_hierarquica', 'nome_guerra')
+        ) if om else []
+        filtro_mil = request.GET.get('militar', '')
+        if filtro_mil:
+            indisp = indisp.filter(militar_id=filtro_mil)
+
+    return render(request, 'indisponibilidade/listar.html', {
+        'indisp': indisp,
+        'om': om,
+        'militar_proprio': militar_proprio,
+        'militares': militares,
+        'filtro_mil': filtro_mil,
+    })
+
+
+@login_required
+def indisponibilidade_criar(request):
+    om = obter_om_ativa(request)
+    militar_proprio = getattr(request.user, 'militar', None)
+
+    if request.method == 'POST':
+        form = IndisponibilidadeRegistrarForm(
+            request.POST, om=om, militar_fixo=militar_proprio
+        )
+        if form.is_valid():
+            ind = form.save(commit=False)
+            if militar_proprio and not ind.militar_id:
+                ind.militar = militar_proprio
+            ind.save()
+            messages.success(
+                request,
+                f'Indisponibilidade registrada: {ind.tipo.nome} de '
+                f'{ind.data_inicio.strftime("%d/%m/%Y")} a {ind.data_fim.strftime("%d/%m/%Y")}.',
+            )
+            return redirect('indisponibilidade_listar')
+    else:
+        form = IndisponibilidadeRegistrarForm(om=om, militar_fixo=militar_proprio)
+
+    return render(request, 'indisponibilidade/criar.html', {
+        'form': form,
+        'om': om,
+        'militar_proprio': militar_proprio,
+    })
+
+
+@login_required
+@require_POST
+def indisponibilidade_excluir(request, ind_id):
+    ind = get_object_or_404(Indisponibilidade, pk=ind_id)
+    militar_proprio = getattr(request.user, 'militar', None)
+
+    if militar_proprio and ind.militar_id != militar_proprio.id:
+        messages.error(request, 'Sem permissão para excluir esta indisponibilidade.')
+        return redirect('indisponibilidade_listar')
+
+    desc = f'{ind.tipo.nome} — {ind.militar.nome_guerra}'
+    ind.delete()
+    messages.success(request, f'Indisponibilidade removida: {desc}.')
+    return redirect('indisponibilidade_listar')
 
 
 @login_required

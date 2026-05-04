@@ -24,13 +24,22 @@ def obter_om_da_sessao(request):
 
 
 def om_context(request):
-    """Disponibiliza `om_ativa` e `oms_disponiveis` em todos os templates."""
+    """Disponibiliza `om_ativa`, `oms_disponiveis` e `militar_do_usuario` em todos os templates."""
     if not getattr(request, 'user', None) or not request.user.is_authenticated:
-        return {'om_ativa': None, 'oms_disponiveis': []}
+        return {'om_ativa': None, 'oms_disponiveis': [], 'militar_do_usuario': None}
 
     om_ativa = obter_om_da_sessao(request)
     oms = list(OrganizacaoMilitar.objects.filter(ativo=True).order_by('sigla'))
+
+    # Militar vinculado ao usuário logado (None se for escalante/admin)
+    militar_do_usuario = None
+    try:
+        militar_do_usuario = request.user.militar
+    except Exception:
+        pass
+
     return {
         'om_ativa': om_ativa,
         'oms_disponiveis': oms,
+        'militar_do_usuario': militar_do_usuario,
     }

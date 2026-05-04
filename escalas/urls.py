@@ -106,6 +106,11 @@ urlpatterns = [
         name='quadrinho_editar',
     ),
 
+    # Indisponibilidades
+    path('indisponibilidades/', views.indisponibilidade_listar, name='indisponibilidade_listar'),
+    path('indisponibilidades/nova/', views.indisponibilidade_criar, name='indisponibilidade_criar'),
+    path('indisponibilidades/<int:ind_id>/excluir/', views.indisponibilidade_excluir, name='indisponibilidade_excluir'),
+
     # Escalas
     path('escalas/', views.escala_listar, name='escala_listar'),
     path('escalas/nova/', views.escala_criar, name='escala_criar'),

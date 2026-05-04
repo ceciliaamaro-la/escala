@@ -11,7 +11,15 @@
             {% if tipo_escala_atual %} &middot; <strong>{{ tipo_escala_atual.nome }}</strong>{% endif %}
         </div>
     </div>
-    <div class="d-flex gap-2">
+    <div class="d-flex gap-2 flex-wrap">
+        {% if escala_atual %}
+        <a href="{% url 'escala_matriz' escala_atual.id %}" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-grid-3x3"></i> Ver Matriz
+        </a>
+        <a href="{% url 'escala_detalhar' escala_atual.id %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-calendar2-week"></i> Ver Escala
+        </a>
+        {% endif %}
         <form method="get" class="d-flex gap-2 align-items-center">
             <input type="hidden" name="tipo_escala" value="{{ tipo_escala_atual.id|default:'' }}">
             <input type="hidden" name="ordem" value="{{ ordem }}">
