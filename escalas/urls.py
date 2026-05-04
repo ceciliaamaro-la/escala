@@ -105,4 +105,13 @@ urlpatterns = [
         views.quadrinho_editar,
         name='quadrinho_editar',
     ),
+
+    # Escalas
+    path('escalas/', views.escala_listar, name='escala_listar'),
+    path('escalas/nova/', views.escala_criar, name='escala_criar'),
+    path('escalas/<int:escala_id>/', views.escala_detalhar, name='escala_detalhar'),
+    path('escalas/<int:escala_id>/gerar/', views.escala_gerar, name='escala_gerar'),
+    path('escalas/<int:escala_id>/limpar/', views.escala_limpar, name='escala_limpar'),
+    path('escalas/<int:escala_id>/previsao/', views.escala_marcar_previsao, name='escala_marcar_previsao'),
+    path('escalas/<int:escala_id>/publicar/', views.escala_publicar, name='escala_publicar'),
 ]

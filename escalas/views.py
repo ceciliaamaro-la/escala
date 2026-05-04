@@ -7,7 +7,7 @@ Especialidades, Militares). As views de geração de escala estão em
 Suporta múltiplas OMs: a OM ativa é mantida na sessão do usuário
 (`request.session['om_id_ativa']`) e selecionada via dropdown na navbar.
 """
-from datetime import date as _date
+from datetime import date as _date, date
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -19,6 +19,7 @@ from django.views.decorators.http import require_POST
 from .context_processors import SESSION_KEY_OM, obter_om_da_sessao
 from .forms_cadastro import (
     DivisaoForm,
+    EscalaCriarForm,
     EspecialidadeForm,
     MilitarForm,
     OrganizacaoMilitarForm,
@@ -28,9 +29,12 @@ from .forms_cadastro import (
     TipoIndisponibilidadeForm,
 )
 from .models import (
+    CalendarioDia,
     Divisao,
+    Escala,
     EscalaItem,
     Especialidade,
+    Indisponibilidade,
     Militar,
     OrganizacaoMilitar,
     Posto,
@@ -878,3 +882,286 @@ def militar_excluir(request, militar_id):
         'cadastro/militar_confirm_delete.html',
         {'militar': militar},
     )
+
+
+# ===========================================================================
+# ESCALAS — listagem, criação, detalhe, geração automática (matriz)
+# ===========================================================================
+
+NOMES_MESES = [
+    '', 'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+]
+
+
+@login_required
+def escala_listar(request):
+    """Lista todas as escalas da OM ativa."""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.warning(request, 'Nenhuma OM ativa. Cadastre ou selecione uma OM.')
+        return redirect('organizacao_novo')
+
+    escalas = (
+        Escala.objects.filter(organizacao_militar=om)
+        .select_related('tipo_escala')
+        .order_by('-ano', '-mes')
+    )
+
+    # filtros simples
+    filtro_tipo = request.GET.get('tipo')
+    filtro_status = request.GET.get('status')
+    filtro_ano = request.GET.get('ano')
+    if filtro_tipo:
+        escalas = escalas.filter(tipo_escala_id=filtro_tipo)
+    if filtro_status:
+        escalas = escalas.filter(status=filtro_status)
+    if filtro_ano:
+        escalas = escalas.filter(ano=filtro_ano)
+
+    tipos = TipoEscala.objects.filter(ativo=True)
+    anos = sorted(
+        Escala.objects.filter(organizacao_militar=om)
+        .values_list('ano', flat=True).distinct(),
+        reverse=True,
+    )
+
+    return render(request, 'escala/listar.html', {
+        'escalas': escalas,
+        'tipos': tipos,
+        'anos': anos,
+        'filtro_tipo': filtro_tipo,
+        'filtro_status': filtro_status,
+        'filtro_ano': filtro_ano,
+        'STATUS_CHOICES': Escala.STATUS_CHOICES,
+        'nomes_meses': NOMES_MESES,
+    })
+
+
+@login_required
+def escala_criar(request):
+    """Cria um novo cabeçalho de escala para a OM ativa."""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.warning(request, 'Nenhuma OM ativa.')
+        return redirect('organizacao_novo')
+
+    if request.method == 'POST':
+        form = EscalaCriarForm(request.POST)
+        if form.is_valid():
+            tipo = form.cleaned_data['tipo_escala']
+            mes = int(form.cleaned_data['mes'])
+            ano = form.cleaned_data['ano']
+            obs = form.cleaned_data.get('observacao', '')
+
+            # Verificar duplicidade
+            if Escala.objects.filter(
+                organizacao_militar=om, tipo_escala=tipo, mes=mes, ano=ano
+            ).exists():
+                messages.error(
+                    request,
+                    f'Já existe uma escala de {tipo.nome} para '
+                    f'{NOMES_MESES[mes]}/{ano}.',
+                )
+            else:
+                escala = Escala.objects.create(
+                    organizacao_militar=om,
+                    tipo_escala=tipo,
+                    mes=mes,
+                    ano=ano,
+                    observacao=obs,
+                    status='rascunho',
+                )
+                messages.success(
+                    request,
+                    f'Escala {NOMES_MESES[mes]}/{ano} criada com sucesso!',
+                )
+                return redirect('escala_detalhar', escala_id=escala.id)
+    else:
+        form = EscalaCriarForm()
+
+    return render(request, 'escala/criar.html', {'form': form, 'om': om})
+
+
+@login_required
+def escala_detalhar(request, escala_id):
+    """Exibe os itens da escala em formato de lista e tabela."""
+    om = obter_om_ativa(request)
+    escala = get_object_or_404(Escala, pk=escala_id)
+
+    itens = (
+        escala.itens
+        .select_related('militar__posto', 'calendario_dia__tipo_servico')
+        .order_by('calendario_dia__data')
+    )
+
+    # Contagem por militar
+    contagem: dict = {}
+    for item in itens:
+        m = item.militar
+        contagem.setdefault(m, 0)
+        contagem[m] += 1
+
+    contagem_lista = sorted(contagem.items(), key=lambda x: -x[1])
+
+    return render(request, 'escala/detalhar.html', {
+        'escala': escala,
+        'itens': itens,
+        'contagem_lista': contagem_lista,
+        'nomes_meses': NOMES_MESES,
+        'pode_editar': escala.status in ('rascunho', 'previsao'),
+    })
+
+
+@login_required
+def escala_gerar(request, escala_id):
+    """
+    Gera a escala automaticamente usando o algoritmo de matriz.
+    POST = executa; GET = tela de confirmação.
+    """
+    from calendar import monthrange
+    from .engine_escala import gerar_escala_matriz, obter_indisponibilidades
+
+    escala = get_object_or_404(Escala, pk=escala_id)
+    om = escala.organizacao_militar
+
+    if escala.status not in ('rascunho', 'previsao'):
+        messages.error(request, 'Somente escalas em Rascunho ou Previsão podem ser geradas.')
+        return redirect('escala_detalhar', escala_id=escala_id)
+
+    if request.method == 'POST':
+        # Limpar itens existentes antes de regerar
+        escala.itens.all().delete()
+
+        # ----- Montar lista de dias -----
+        primeiro_dia = date(escala.ano, escala.mes, 1)
+        ultimo_num = monthrange(escala.ano, escala.mes)[1]
+        ultimo_dia = date(escala.ano, escala.mes, ultimo_num)
+
+        # Gerar calendário se não existir
+        dias_qs = CalendarioDia.objects.filter(
+            organizacao_militar=om,
+            data__range=(primeiro_dia, ultimo_dia),
+        ).select_related('tipo_servico').order_by('data')
+
+        if not dias_qs.exists():
+            # Tentar gerar automaticamente
+            try:
+                CalendarioDia.gerar_calendario_automatico(om, escala.ano)
+                dias_qs = CalendarioDia.objects.filter(
+                    organizacao_militar=om,
+                    data__range=(primeiro_dia, ultimo_dia),
+                ).select_related('tipo_servico').order_by('data')
+            except Exception as e:
+                messages.error(
+                    request,
+                    f'Sem calendário para {NOMES_MESES[escala.mes]}/{escala.ano}. '
+                    f'Cadastre os Tipos de Serviço da OM primeiro. ({e})'
+                )
+                return redirect('escala_detalhar', escala_id=escala_id)
+
+        lista_dias = list(dias_qs)
+
+        # ----- Militares da OM (mais moderno → mais antigo = ASC posto) -----
+        # Índice 0 = posto mais baixo (mais moderno/junior) = bottom da matriz
+        lista_militares = list(
+            Militar.objects.filter(organizacao_militar=om, ativo=True)
+            .select_related('posto')
+            .order_by('posto__ordem_hierarquica', 'nome_guerra')
+        )
+
+        if not lista_militares:
+            messages.error(request, 'Nenhum militar ativo nesta OM.')
+            return redirect('escala_detalhar', escala_id=escala_id)
+
+        # ----- Indisponibilidades -----
+        indisp = obter_indisponibilidades(lista_militares, primeiro_dia, ultimo_dia)
+
+        # ----- Rodar algoritmo de matriz -----
+        resultado = gerar_escala_matriz(lista_militares, lista_dias, indisp)
+
+        # ----- Persistir itens -----
+        criados = 0
+        sem_militar = 0
+        for dia, militar in resultado:
+            if militar is not None:
+                EscalaItem.objects.create(
+                    escala=escala,
+                    militar=militar,
+                    calendario_dia=dia,
+                    observacao='Gerado automaticamente (matriz)',
+                )
+                criados += 1
+                # Incrementar quadrinho
+                Quadrinho.incrementar(
+                    militar=militar,
+                    tipo_escala=escala.tipo_escala,
+                    tipo_servico=dia.tipo_servico,
+                    ano=escala.ano,
+                )
+            else:
+                sem_militar += 1
+
+        if sem_militar:
+            messages.warning(
+                request,
+                f'{sem_militar} dia(s) sem militar disponível (todos indisponíveis nesse dia).',
+            )
+        messages.success(
+            request,
+            f'Escala gerada! {criados} dia(s) preenchidos automaticamente.',
+        )
+        return redirect('escala_detalhar', escala_id=escala_id)
+
+    # GET — tela de confirmação
+    militares_count = Militar.objects.filter(organizacao_militar=om, ativo=True).count()
+    tem_itens = escala.itens.exists()
+    return render(request, 'escala/gerar.html', {
+        'escala': escala,
+        'militares_count': militares_count,
+        'tem_itens': tem_itens,
+        'nomes_meses': NOMES_MESES,
+    })
+
+
+@login_required
+@require_POST
+def escala_limpar(request, escala_id):
+    """Remove todos os itens da escala (só rascunho/previsão)."""
+    escala = get_object_or_404(Escala, pk=escala_id)
+    if escala.status not in ('rascunho', 'previsao'):
+        messages.error(request, 'Não é possível limpar uma escala publicada.')
+    else:
+        total = escala.itens.count()
+        escala.itens.all().delete()
+        messages.success(request, f'{total} item(ns) removido(s).')
+    return redirect('escala_detalhar', escala_id=escala_id)
+
+
+@login_required
+@require_POST
+def escala_marcar_previsao(request, escala_id):
+    """Muda status para Previsão."""
+    escala = get_object_or_404(Escala, pk=escala_id)
+    try:
+        escala.marcar_previsao()
+        messages.success(request, 'Escala marcada como Previsão.')
+    except Exception as e:
+        messages.error(request, str(e))
+    return redirect('escala_detalhar', escala_id=escala_id)
+
+
+@login_required
+@require_POST
+def escala_publicar(request, escala_id):
+    """Publica a escala (status → publicada)."""
+    escala = get_object_or_404(Escala, pk=escala_id)
+    if not escala.itens.exists():
+        messages.error(request, 'Escala vazia — preencha antes de publicar.')
+        return redirect('escala_detalhar', escala_id=escala_id)
+    try:
+        escala.publicar()
+        messages.success(request, 'Escala publicada com sucesso!')
+    except Exception as e:
+        messages.error(request, str(e))
+    return redirect('escala_detalhar', escala_id=escala_id)

@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% load escala_filters %}
+{% block titulo %}Escala {{ escala.tipo_escala.nome }} {{ nomes_meses|index:escala.mes }}/{{ escala.ano }} — {{ block.super }}{% endblock %}
+
+{% block conteudo %}
+
+{# ---- Cabeçalho ---- #}
+<div class="d-flex justify-content-between align-items-start mb-3 flex-wrap gap-2">
+    <div>
+        <h2 class="mb-0">
+            <i class="bi bi-calendar2-week"></i>
+            {{ escala.tipo_escala.nome }}
+            <span class="text-muted fw-normal fs-5">
+                {{ nomes_meses|index:escala.mes }}/{{ escala.ano }}
+            </span>
+        </h2>
+        <small class="text-muted">{{ escala.organizacao_militar.sigla }} — {{ escala.organizacao_militar.nome }}</small>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        {% if pode_editar %}
+            <a href="{% url 'escala_gerar' escala.id %}" class="btn btn-warning btn-sm">
+                <i class="bi bi-lightning-charge"></i> Gerar Automático
+            </a>
+            {% if itens %}
+            <form method="post" action="{% url 'escala_limpar' escala.id %}"
+                  onsubmit="return confirm('Apagar todos os itens desta escala?')">
+                {% csrf_token %}
+                <button class="btn btn-outline-danger btn-sm">
+                    <i class="bi bi-trash3"></i> Limpar
+                </button>
+            </form>
+            {% endif %}
+            {% if escala.status == 'rascunho' and itens %}
+            <form method="post" action="{% url 'escala_marcar_previsao' escala.id %}">
+                {% csrf_token %}
+                <button class="btn btn-info btn-sm text-dark">
+                    <i class="bi bi-clock"></i> Marcar Previsão
+                </button>
+            </form>
+            {% endif %}
+            {% if itens %}
+            <form method="post" action="{% url 'escala_publicar' escala.id %}"
+                  onsubmit="return confirm('Publicar esta escala? Ela ficará oficial e não poderá mais ser alterada.')">
+                {% csrf_token %}
+                <button class="btn btn-success btn-sm">
+                    <i class="bi bi-check2-circle"></i> Publicar
+                </button>
+            </form>
+            {% endif %}
+        {% endif %}
+        <a href="{% url 'escala_listar' %}" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Voltar
+        </a>
+    </div>
+</div>
+
+{# Badge de status #}
+<div class="mb-4">
+    {% if escala.status == 'rascunho' %}
+        <span class="badge bg-secondary fs-6">Rascunho</span>
+    {% elif escala.status == 'previsao' %}
+        <span class="badge bg-info text-dark fs-6">Previsão</span>
+    {% elif escala.status == 'publicada' %}
+        <span class="badge bg-success fs-6"><i class="bi bi-shield-check"></i> Escala Oficial</span>
+    {% else %}
+        <span class="badge bg-dark fs-6">Arquivada</span>
+    {% endif %}
+    {% if escala.observacao %}
+    <span class="text-muted small ms-2">{{ escala.observacao }}</span>
+    {% endif %}
+</div>
+
+{% if not itens %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    Nenhum dia preenchido ainda.
+    {% if pode_editar %}
+    <a href="{% url 'escala_gerar' escala.id %}" class="alert-link">
+        Gerar automaticamente via matriz →
+    </a>
+    {% endif %}
+</div>
+{% else %}
+
+<div class="row g-4">
+    {# ---- Tabela principal ---- #}
+    <div class="col-lg-8">
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-table"></i> Escala do Mês
+                <span class="badge bg-primary ms-2">{{ itens|length }} dia(s)</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Data</th>
+                            <th>Dia</th>
+                            <th>Tipo</th>
+                            <th>Militar</th>
+                            <th>Posto</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    {% for item in itens %}
+                        {% with ts=item.calendario_dia.tipo_servico %}
+                        <tr>
+                            <td class="fw-semibold">{{ item.calendario_dia.data|date:"d/m/Y" }}</td>
+                            <td class="text-muted small">{{ item.calendario_dia.data|date:"D"|capfirst }}</td>
+                            <td>
+                                <span class="badge"
+                                      style="background-color:{{ ts.cor_hex }};color:{% if ts.cor_hex == '#000000' %}#fff{% elif ts.cor_hex == '#ffffff' %}#000{% else %}#fff{% endif %}">
+                                    {{ ts.nome }}
+                                </span>
+                            </td>
+                            <td><strong>{{ item.militar.nome_guerra }}</strong></td>
+                            <td class="small text-muted">{{ item.militar.posto.sigla }}</td>
+                        </tr>
+                        {% endwith %}
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    {# ---- Resumo por militar ---- #}
+    <div class="col-lg-4">
+        <div class="card shadow-sm">
+            <div class="card-header fw-semibold">
+                <i class="bi bi-bar-chart-line"></i> Distribuição
+            </div>
+            <ul class="list-group list-group-flush">
+                {% for militar, total in contagem_lista %}
+                <li class="list-group-item d-flex justify-content-between align-items-center py-2">
+                    <div>
+                        <strong>{{ militar.nome_guerra }}</strong>
+                        <br><small class="text-muted">{{ militar.posto.sigla }}</small>
+                    </div>
+                    <span class="badge bg-primary rounded-pill fs-6">{{ total }}</span>
+                </li>
+                {% endfor %}
+            </ul>
+        </div>
+
+        {# ---- Legenda de tipos ---- #}
+        {% if itens %}
+        <div class="card shadow-sm mt-3">
+            <div class="card-header fw-semibold small">Legenda</div>
+            <div class="card-body py-2">
+                {% for item in itens %}
+                    {% with ts=item.calendario_dia.tipo_servico %}
+                    <span class="badge me-1 mb-1"
+                          style="background-color:{{ ts.cor_hex }};color:{% if ts.cor_hex == '#000000' %}#fff{% elif ts.cor_hex == '#ffffff' %}#000{% else %}#fff{% endif %}">
+                        {{ ts.nome }}
+                    </span>
+                    {% endwith %}
+                {% empty %}{% endfor %}
+                {# deduplica via template — apenas visual, repetição é ok #}
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

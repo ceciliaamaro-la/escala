@@ -232,3 +232,42 @@ class QuadrinhoForm(BootstrapFormMixin, forms.ModelForm):
                 'manualmente quando necessário.'
             ),
         }
+
+
+# ---------------------------------------------------------------------------
+# Escala (criação/edição de cabeçalho)
+# ---------------------------------------------------------------------------
+
+MESES = [
+    (1, 'Janeiro'), (2, 'Fevereiro'), (3, 'Março'), (4, 'Abril'),
+    (5, 'Maio'), (6, 'Junho'), (7, 'Julho'), (8, 'Agosto'),
+    (9, 'Setembro'), (10, 'Outubro'), (11, 'Novembro'), (12, 'Dezembro'),
+]
+
+
+class EscalaCriarForm(BootstrapFormMixin, forms.Form):
+    """Formulário simplificado para criar cabeçalho de escala."""
+    tipo_escala = forms.ModelChoiceField(
+        queryset=TipoEscala.objects.filter(ativo=True),
+        label='Tipo de Escala',
+        empty_label='Selecione…',
+    )
+    mes = forms.ChoiceField(choices=MESES, label='Mês')
+    ano = forms.IntegerField(
+        min_value=2020,
+        max_value=2100,
+        label='Ano',
+        widget=forms.NumberInput(attrs={'min': 2020, 'max': 2100}),
+    )
+    observacao = forms.CharField(
+        required=False,
+        label='Observação',
+        widget=forms.Textarea(attrs={'rows': 2}),
+    )
+
+    def __init__(self, *args, **kwargs):
+        from datetime import date
+        super().__init__(*args, **kwargs)
+        hoje = date.today()
+        self.fields['mes'].initial = hoje.month
+        self.fields['ano'].initial = hoje.year

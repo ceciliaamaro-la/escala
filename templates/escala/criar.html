@@ -1,0 +1,29 @@
+{% extends 'base.html' %}
+{% block titulo %}Nova Escala — {{ block.super }}{% endblock %}
+
+{% block conteudo %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <i class="bi bi-calendar2-plus"></i>
+                Nova Escala — <strong>{{ om.sigla }}</strong>
+            </div>
+            <div class="card-body">
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    {% include 'cadastro/_form_layout.html' %}
+                    <div class="d-flex gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-lg"></i> Criar Escala
+                        </button>
+                        <a href="{% url 'escala_listar' %}" class="btn btn-outline-secondary">
+                            <i class="bi bi-x"></i> Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

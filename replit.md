@@ -15,16 +15,19 @@ Aplicação Django 6.0 para gestão de escalas militares da **FAB (Força Aérea
 - `core/` — projeto Django (settings, urls, wsgi, asgi)
 - `escalas/`
   - `models.py` — domínio completo
-  - `views.py` — dashboard + cadastros (atual)
-  - `views_escala_legado.py` — views antigas de escala (a integrar)
-  - `forms_cadastro.py` — ModelForms com BootstrapFormMixin
-  - `urls.py` — rotas dos cadastros
+  - `views.py` — dashboard, cadastros e **views de escala** (listar, criar, detalhar, gerar, publicar)
+  - `views_escala_legado.py` — views antigas de escala (referência)
+  - `engine_escala.py` — **motor de geração automática por matriz** (algoritmo principal)
+  - `forms_cadastro.py` — ModelForms com BootstrapFormMixin + `EscalaCriarForm`
+  - `templatetags/escala_filters.py` — filtro `index` para templates
+  - `urls.py` — rotas dos cadastros + rotas de escala (`/escalas/`)
   - `management/commands/seed_dados.py` — popula dados de exemplo
 - `templates/`
-  - `base.html` — layout principal (navbar, footer, mensagens)
+  - `base.html` — layout principal (navbar com link Escalas, footer, mensagens)
   - `registration/login.html`
   - `dashboard.html`
   - `cadastro/` — telas de OM, postos, especialidades, divisões e militares
+  - `escala/` — listagem, criação, detalhe e tela de geração automática
 - `escalas/context_processors.py` — `om_context` injeta `om_ativa` e `oms_disponiveis` em todos os templates
 - `static/css/militar.css` — tema visual FAB (azul #003a78, amarelo #ffd200)
 - `db.sqlite3` — SQLite versionado
@@ -91,8 +94,31 @@ Para repopular do zero: `python manage.py seed_dados --reset`
 - `ajuste_inicial` — saldo legado (antes do sistema entrar no ar). Necessário porque a operação começou em meio de ano com contagem prévia.
 - `total` (property) = `ajuste_inicial + quantidade`. É o valor exibido em todas as telas.
 
+## Motor de Geração por Matriz (`escalas/engine_escala.py`)
+
+O algoritmo representa militares × dias como uma matriz:
+- **Linhas (militares)**: ordenados de baixo para cima — mais moderno (menor `posto.ordem_hierarquica`) no índice 0.
+- **Colunas (dias)**: da esquerda para a direita (dia 1 → último dia).
+
+Para cada dia, o algoritmo:
+1. Filtra militares disponíveis (sem `Indisponibilidade` com `exclui_do_sorteio=True` na data).
+2. Ordena candidatos por: menor nº de serviços no mês → maior tempo desde o último serviço → posição na matriz (mais moderno primeiro).
+3. Evita dias consecutivos (restrição suave — ignora se não houver alternativa).
+4. Registra o `EscalaItem` e incrementa o `Quadrinho`.
+
+## Rotas de Escala
+
+- `/escalas/` — listagem com filtros (tipo, status, ano)
+- `/escalas/nova/` — criar nova escala (OM ativa + tipo + mês/ano)
+- `/escalas/<id>/` — detalhe: tabela de dias, distribuição por militar
+- `/escalas/<id>/gerar/` — tela de confirmação + execução do algoritmo de matriz (POST)
+- `/escalas/<id>/limpar/` — remove todos os itens (POST)
+- `/escalas/<id>/previsao/` — muda status para Previsão (POST)
+- `/escalas/<id>/publicar/` — publica a escala como oficial (POST)
+
 ## Próximos passos sugeridos
 
-- Reaproveitar `views_escala_legado.py` para reativar geração/visualização de escalas com novo visual, incluindo a tela de impressão "Escala atual + PREVISÃO próximo mês" no formato do PDF de referência (`attached_assets/Escala_Permanencia_*.pdf`).
-- Telas de indisponibilidades por militar.
+- Telas de cadastro/edição de indisponibilidades por militar (atual: apenas consulta no algoritmo).
+- Tela de impressão no formato PDF da escala publicada.
 - Tela de calendário (cores Preto/Vermelho/Roxo) com edição manual de feriados.
+- Visualização da matriz completa (militares × dias) na tela de detalhe.

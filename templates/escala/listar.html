@@ -1,0 +1,107 @@
+{% extends 'base.html' %}
+{% load escala_filters %}
+{% block titulo %}Escalas — {{ block.super }}{% endblock %}
+
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2 class="mb-0"><i class="bi bi-calendar2-week"></i> Escalas</h2>
+    <a href="{% url 'escala_criar' %}" class="btn btn-mil-dourado">
+        <i class="bi bi-plus-lg"></i> Nova Escala
+    </a>
+</div>
+
+{# Filtros #}
+<form method="get" class="card card-body mb-4 p-3">
+    <div class="row g-2 align-items-end">
+        <div class="col-sm-4 col-md-3">
+            <label class="form-label small fw-semibold">Tipo de Escala</label>
+            <select name="tipo" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for t in tipos %}
+                    <option value="{{ t.id }}" {% if filtro_tipo == t.id|stringformat:'s' %}selected{% endif %}>{{ t.nome }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-4 col-md-3">
+            <label class="form-label small fw-semibold">Status</label>
+            <select name="status" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for val, label in STATUS_CHOICES %}
+                    <option value="{{ val }}" {% if filtro_status == val %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-4 col-md-2">
+            <label class="form-label small fw-semibold">Ano</label>
+            <select name="ano" class="form-select form-select-sm">
+                <option value="">Todos</option>
+                {% for a in anos %}
+                    <option value="{{ a }}" {% if filtro_ano == a|stringformat:'s' %}selected{% endif %}>{{ a }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-auto">
+            <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-funnel"></i> Filtrar
+            </button>
+            <a href="{% url 'escala_listar' %}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x"></i> Limpar
+            </a>
+        </div>
+    </div>
+</form>
+
+{% if escalas %}
+<div class="table-responsive">
+    <table class="table table-hover align-middle">
+        <thead class="table-dark">
+            <tr>
+                <th>Período</th>
+                <th>Tipo</th>
+                <th>Status</th>
+                <th class="text-center">Dias</th>
+                <th>Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for e in escalas %}
+            <tr>
+                <td>
+                    <strong>{{ nomes_meses|index:e.mes }}/{{ e.ano }}</strong>
+                </td>
+                <td>{{ e.tipo_escala.nome }}</td>
+                <td>
+                    {% if e.status == 'rascunho' %}
+                        <span class="badge bg-secondary">Rascunho</span>
+                    {% elif e.status == 'previsao' %}
+                        <span class="badge bg-info text-dark">Previsão</span>
+                    {% elif e.status == 'publicada' %}
+                        <span class="badge bg-success">Oficial</span>
+                    {% else %}
+                        <span class="badge bg-dark">Arquivada</span>
+                    {% endif %}
+                </td>
+                <td class="text-center">{{ e.itens.count }}</td>
+                <td>
+                    <a href="{% url 'escala_detalhar' e.id %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i> Ver
+                    </a>
+                    {% if e.status in 'rascunho previsao' %}
+                    <a href="{% url 'escala_gerar' e.id %}" class="btn btn-sm btn-outline-warning">
+                        <i class="bi bi-lightning-charge"></i> Gerar
+                    </a>
+                    {% endif %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% else %}
+<div class="alert alert-info">
+    <i class="bi bi-info-circle"></i>
+    Nenhuma escala encontrada.
+    <a href="{% url 'escala_criar' %}" class="alert-link">Criar a primeira escala</a>.
+</div>
+{% endif %}
+{% endblock %}
