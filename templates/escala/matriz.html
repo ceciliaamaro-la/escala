@@ -52,62 +52,68 @@
 </div>
 {% else %}
 
-{# ── Matriz visual ─────────────────────────────────────────────────── #}
+{# ── Matriz visual — formato planilha (datas de serviço por linha) ───── #}
 <div class="card shadow-sm mb-4">
-  <div class="card-header fw-semibold d-flex justify-content-between align-items-center">
+  <div class="card-header fw-semibold d-flex justify-content-between align-items-center flex-wrap gap-2">
     <span><i class="bi bi-table"></i> Matriz Militares × Dias</span>
-    <small class="text-muted">↑ TOPO (mais antigo) &nbsp;|&nbsp; ↓ BASE (mais moderno) &nbsp;|&nbsp; leitura: BASE → TOPO</small>
+    <div class="d-flex gap-3 small text-muted align-items-center">
+      <span><span style="display:inline-block;width:12px;height:12px;background:#198754;border-radius:2px;"></span> Escalado</span>
+      <span><span style="display:inline-block;width:12px;height:12px;background:#dc3545;border-radius:2px;"></span> Indisponível</span>
+      <span class="fst-italic">↑ TOPO (mais antigo) &nbsp;|&nbsp; ↓ BASE (mais moderno)</span>
+    </div>
   </div>
-  <div class="table-responsive" style="overflow-x:auto;">
-    <table class="table table-bordered table-sm mb-0 align-middle" style="min-width:900px; font-size:0.78rem;">
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm mb-0 align-middle" style="font-size:0.82rem;">
       <thead class="table-dark">
         <tr>
-          <th style="min-width:130px; position:sticky; left:0; background:#212529; z-index:2;">Militar</th>
-          <th style="min-width:60px;">Posto</th>
-          {% for dia in dias %}
-          <th class="text-center" style="min-width:32px; padding:2px 4px;">
-            {{ dia.data|date:"d" }}
-            <div class="text-muted" style="font-size:0.65rem; font-weight:normal;">{{ dia.data|date:"D"|slice:":3"|upper }}</div>
-          </th>
-          {% endfor %}
-          <th class="text-center" style="min-width:40px;">Total</th>
+          <th style="min-width:130px; white-space:nowrap;">Militar</th>
+          <th style="min-width:65px; white-space:nowrap;">Posto</th>
+          <th>Serviços realizados</th>
+          <th class="text-center" style="min-width:50px;">Total</th>
         </tr>
       </thead>
       <tbody>
-        {# Renderiza de cima para baixo: TOPO (mais antigo) → BASE (mais moderno) #}
+        {# TOPO (1ª linha = mais antigo) → BASE (última linha = mais moderno) #}
         {% for row in matrix_rows %}
         <tr>
-          <td style="position:sticky; left:0; background:#fff; z-index:1; font-weight:600;">
-            {{ row.militar.nome_guerra }}
-            {% if forloop.last %}
-              <span class="badge bg-warning text-dark ms-1" style="font-size:0.6rem;">BASE</span>
-            {% endif %}
+          <td class="fw-semibold" style="white-space:nowrap;">
             {% if forloop.first %}
-              <span class="badge bg-info text-dark ms-1" style="font-size:0.6rem;">TOPO</span>
+              <span class="badge bg-info text-dark me-1" style="font-size:0.6rem;" title="Topo da matriz — mais antigo">↑</span>
             {% endif %}
+            {% if forloop.last %}
+              <span class="badge bg-warning text-dark me-1" style="font-size:0.6rem;" title="Base da matriz — mais moderno">↓</span>
+            {% endif %}
+            {{ row.militar.nome_guerra }}
           </td>
           <td class="text-muted" style="white-space:nowrap;">{{ row.militar.posto.sigla }}</td>
-          {% for cell in row.cells %}
-          <td class="text-center p-0" style="height:28px;">
-            {% if cell.serves %}
-              <span class="d-block w-100 h-100 d-flex align-items-center justify-content-center"
-                    style="background:#198754; color:#fff; font-size:0.7rem; font-weight:700;"
-                    title="{{ cell.dia.data|date:'d/m' }} — escalado">
-                {{ cell.dia.data|date:"d" }}
-              </span>
-            {% elif cell.unavailable %}
-              <span class="d-block w-100 h-100 d-flex align-items-center justify-content-center"
-                    style="background:#dc3545; color:#fff; font-size:0.65rem;"
-                    title="{{ cell.motivo }}">
-                ✕
-              </span>
-            {% else %}
-              <span class="d-block" style="background:#f8f9fa; height:28px;"></span>
-            {% endif %}
+
+          {# Células: só mostra dias em que o militar serviu ou estava indisponível #}
+          <td style="padding:4px 8px;">
+            <div class="d-flex flex-wrap gap-1">
+              {% for cell in row.cells %}
+                {% if cell.serves %}
+                  <span class="badge"
+                        style="background:#198754; font-size:0.78rem; font-weight:600; padding:4px 7px; border-radius:4px;"
+                        title="{{ cell.dia.data|date:'l' }}">
+                    {{ cell.dia.data|date:"d/m" }}
+                  </span>
+                {% elif cell.unavailable %}
+                  <span class="badge d-flex align-items-center gap-1"
+                        style="background:#dc3545; font-size:0.75rem; font-weight:500; padding:4px 7px; border-radius:4px;"
+                        title="{{ cell.dia.data|date:'d/m' }} — {{ cell.motivo }}">
+                    {{ cell.dia.data|date:"d/m" }}
+                    <span style="font-size:0.65rem; opacity:0.9;">({{ cell.motivo|truncatechars:12 }})</span>
+                  </span>
+                {% endif %}
+              {% endfor %}
+              {% if row.total == 0 %}
+                <span class="text-muted fst-italic small">— sem serviços</span>
+              {% endif %}
+            </div>
           </td>
-          {% endfor %}
+
           <td class="text-center fw-bold">
-            <span class="badge bg-primary rounded-pill">{{ row.total }}</span>
+            <span class="badge bg-primary rounded-pill fs-6">{{ row.total }}</span>
           </td>
         </tr>
         {% endfor %}
