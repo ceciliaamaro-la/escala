@@ -86,6 +86,11 @@
                     <a href="{% url 'escala_detalhar' e.id %}" class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-eye"></i> Ver
                     </a>
+                    {% if e.itens.count %}
+                    <a href="{% url 'escala_matriz' e.id %}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-grid-3x3"></i> Matriz
+                    </a>
+                    {% endif %}
                     {% if e.status in 'rascunho previsao' %}
                     <a href="{% url 'escala_gerar' e.id %}" class="btn btn-sm btn-outline-warning">
                         <i class="bi bi-lightning-charge"></i> Gerar
