@@ -281,6 +281,7 @@ class EscalaCriarForm(BootstrapFormMixin, forms.Form):
 class IndisponibilidadeRegistrarForm(BootstrapFormMixin, forms.ModelForm):
     """
     Formulário para registrar indisponibilidade.
+    - data_fim é opcional: se omitida, o sistema usa data_inicio (1 dia).
     - Escalante: campo `militar` é um dropdown filtrado pela OM.
     - Militar logado: campo `militar` é ocultado (preenchido automaticamente).
     """
@@ -290,7 +291,10 @@ class IndisponibilidadeRegistrarForm(BootstrapFormMixin, forms.ModelForm):
         fields = ['militar', 'tipo', 'data_inicio', 'data_fim', 'observacao']
         widgets = {
             'data_inicio': forms.DateInput(attrs={'type': 'date'}),
-            'data_fim': forms.DateInput(attrs={'type': 'date'}),
+            'data_fim': forms.DateInput(attrs={
+                'type': 'date',
+                'placeholder': 'Deixe em branco para registrar 1 dia',
+            }),
             'observacao': forms.Textarea(attrs={'rows': 2}),
         }
         labels = {
@@ -304,6 +308,8 @@ class IndisponibilidadeRegistrarForm(BootstrapFormMixin, forms.ModelForm):
     def __init__(self, *args, om=None, militar_fixo=None, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['tipo'].queryset = TipoIndisponibilidade.objects.filter(ativo=True)
+        self.fields['data_fim'].required = False
+        self.fields['data_fim'].help_text = 'Deixe em branco para registrar apenas 1 dia.'
         if om:
             self.fields['militar'].queryset = (
                 Militar.objects.filter(organizacao_militar=om, ativo=True)
@@ -319,6 +325,11 @@ class IndisponibilidadeRegistrarForm(BootstrapFormMixin, forms.ModelForm):
         cleaned = super().clean()
         ini = cleaned.get('data_inicio')
         fim = cleaned.get('data_fim')
-        if ini and fim and fim < ini:
+        if ini and not fim:
+            cleaned['data_fim'] = ini
+            self._data_fim_ajustada = True
+        elif ini and fim and fim < ini:
             raise ValidationError('Data de fim não pode ser anterior à data de início.')
+        else:
+            self._data_fim_ajustada = False
         return cleaned

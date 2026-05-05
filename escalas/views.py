@@ -858,12 +858,20 @@ def indisponibilidade_criar(request):
             ind = form.save(commit=False)
             if militar_proprio and not ind.militar_id:
                 ind.militar = militar_proprio
+            ind.data_fim = form.cleaned_data['data_fim']
             ind.save()
-            messages.success(
-                request,
-                f'Indisponibilidade registrada: {ind.tipo.nome} de '
-                f'{ind.data_inicio.strftime("%d/%m/%Y")} a {ind.data_fim.strftime("%d/%m/%Y")}.',
-            )
+            um_dia = form.cleaned_data['data_inicio'] == form.cleaned_data['data_fim']
+            if getattr(form, '_data_fim_ajustada', False):
+                msg = (
+                    f'Indisponibilidade registrada como 1 dia: '
+                    f'{ind.tipo.nome} em {ind.data_inicio.strftime("%d/%m/%Y")}.'
+                )
+            else:
+                msg = (
+                    f'Indisponibilidade registrada: {ind.tipo.nome} de '
+                    f'{ind.data_inicio.strftime("%d/%m/%Y")} a {ind.data_fim.strftime("%d/%m/%Y")}.'
+                )
+            messages.success(request, msg)
             return redirect('indisponibilidade_listar')
     else:
         form = IndisponibilidadeRegistrarForm(om=om, militar_fixo=militar_proprio)

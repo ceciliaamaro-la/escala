@@ -22,6 +22,7 @@
   <div class="col-md-7 col-lg-6">
     <div class="card shadow-sm">
       <div class="card-body p-4">
+
         {% if militar_proprio %}
         <div class="alert alert-info py-2 mb-3">
           <i class="bi bi-person-fill"></i>
@@ -29,7 +30,7 @@
         </div>
         {% endif %}
 
-        <form method="post">
+        <form method="post" id="form-indisp">
           {% csrf_token %}
 
           {% if not militar_proprio %}
@@ -50,16 +51,26 @@
             {% if form.tipo.errors %}<div class="text-danger small">{{ form.tipo.errors }}</div>{% endif %}
           </div>
 
-          <div class="row g-3 mb-3">
+          <div class="row g-3 mb-1">
             <div class="col-sm-6">
               <label class="form-label fw-semibold">{{ form.data_inicio.label }}</label>
               {{ form.data_inicio }}
               {% if form.data_inicio.errors %}<div class="text-danger small">{{ form.data_inicio.errors }}</div>{% endif %}
             </div>
             <div class="col-sm-6">
-              <label class="form-label fw-semibold">{{ form.data_fim.label }}</label>
+              <label class="form-label fw-semibold">
+                {{ form.data_fim.label }}
+                <span class="text-muted fw-normal small">(opcional)</span>
+              </label>
               {{ form.data_fim }}
               {% if form.data_fim.errors %}<div class="text-danger small">{{ form.data_fim.errors }}</div>{% endif %}
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <div id="hint-data-fim" class="text-muted small mt-1" style="min-height:1.2em;">
+              <i class="bi bi-info-circle"></i>
+              Deixe em branco para registrar apenas 1 dia.
             </div>
           </div>
 
@@ -82,9 +93,46 @@
             </a>
           </div>
         </form>
+
       </div>
     </div>
   </div>
 </div>
+
+<script>
+(function () {
+  const inicio = document.getElementById('id_data_inicio');
+  const fim    = document.getElementById('id_data_fim');
+  const hint   = document.getElementById('hint-data-fim');
+
+  function atualizarHint() {
+    const vi = inicio ? inicio.value : '';
+    const vf = fim    ? fim.value    : '';
+
+    if (vi && !vf) {
+      const d = new Date(vi + 'T00:00:00');
+      const fmt = d.toLocaleDateString('pt-BR');
+      hint.innerHTML = '<i class="bi bi-info-circle"></i> Será registrado como 1 dia: <strong>' + fmt + '</strong>.';
+    } else if (vi && vf && vi === vf) {
+      hint.innerHTML = '<i class="bi bi-info-circle"></i> Registrado como 1 dia.';
+    } else if (vi && vf) {
+      const di = new Date(vi + 'T00:00:00');
+      const df = new Date(vf + 'T00:00:00');
+      const dias = Math.round((df - di) / 86400000) + 1;
+      if (dias < 1) {
+        hint.innerHTML = '<i class="bi bi-exclamation-triangle text-danger"></i> <span class="text-danger">Data de fim anterior ao início.</span>';
+      } else {
+        hint.innerHTML = '<i class="bi bi-check-circle text-success"></i> Período de <strong>' + dias + ' dia' + (dias > 1 ? 's' : '') + '</strong>.';
+      }
+    } else {
+      hint.innerHTML = '<i class="bi bi-info-circle"></i> Deixe em branco para registrar apenas 1 dia.';
+    }
+  }
+
+  if (inicio) inicio.addEventListener('change', atualizarHint);
+  if (fim)    fim.addEventListener('change',    atualizarHint);
+  atualizarHint();
+})();
+</script>
 
 {% endblock %}
