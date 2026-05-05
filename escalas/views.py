@@ -40,6 +40,7 @@ from .models import (
     Militar,
     OrganizacaoMilitar,
     Posto,
+    PonteiroEscala,
     Quadrinho,
     TipoEscala,
     TipoIndisponibilidade,
@@ -1140,11 +1141,16 @@ def escala_detalhar(request, escala_id):
 @login_required
 def escala_gerar(request, escala_id):
     """
-    Gera a escala automaticamente usando o algoritmo de matriz.
+    Gera a escala automaticamente usando o algoritmo de ponteiro BASE→TOPO.
+
+    Executa separadamente para cada TipoServico (Preta, Vermelha, etc.)
+    mantendo um ponteiro persistente entre meses por OM + TipoServico.
+
     POST = executa; GET = tela de confirmação.
     """
     from calendar import monthrange
-    from .engine_escala import gerar_escala_matriz, obter_indisponibilidades
+    from collections import defaultdict
+    from .engine_escala import gerar_escala_ponteiro, obter_indisponibilidades
 
     escala = get_object_or_404(Escala, pk=escala_id)
     om = escala.organizacao_militar
@@ -1157,19 +1163,18 @@ def escala_gerar(request, escala_id):
         # Limpar itens existentes antes de regerar
         escala.itens.all().delete()
 
-        # ----- Montar lista de dias -----
+        # ----- Intervalo do mês -----
         primeiro_dia = date(escala.ano, escala.mes, 1)
-        ultimo_num = monthrange(escala.ano, escala.mes)[1]
-        ultimo_dia = date(escala.ano, escala.mes, ultimo_num)
+        ultimo_num   = monthrange(escala.ano, escala.mes)[1]
+        ultimo_dia   = date(escala.ano, escala.mes, ultimo_num)
 
-        # Gerar calendário se não existir
+        # ----- Calendário -----
         dias_qs = CalendarioDia.objects.filter(
             organizacao_militar=om,
             data__range=(primeiro_dia, ultimo_dia),
         ).select_related('tipo_servico').order_by('data')
 
         if not dias_qs.exists():
-            # Tentar gerar automaticamente
             try:
                 CalendarioDia.gerar_calendario_automatico(om, escala.ano)
                 dias_qs = CalendarioDia.objects.filter(
@@ -1186,8 +1191,7 @@ def escala_gerar(request, escala_id):
 
         lista_dias = list(dias_qs)
 
-        # ----- Militares da OM (mais moderno → mais antigo = ASC posto) -----
-        # Índice 0 = posto mais baixo (mais moderno/junior) = bottom da matriz
+        # ----- Militares: índice 0 = BASE (mais moderno), índice n-1 = TOPO -----
         lista_militares = list(
             Militar.objects.filter(organizacao_militar=om, ativo=True)
             .select_related('posto')
@@ -1198,45 +1202,80 @@ def escala_gerar(request, escala_id):
             messages.error(request, 'Nenhum militar ativo nesta OM.')
             return redirect('escala_detalhar', escala_id=escala_id)
 
-        # ----- Configuração de regras da escala -----
+        # ----- Configuração e indisponibilidades -----
         config = ConfiguracaoEscala.obter_para_om(om)
-
-        # ----- Indisponibilidades (com regras de folga aplicadas) -----
         indisp = obter_indisponibilidades(lista_militares, primeiro_dia, ultimo_dia, config=config)
 
-        # ----- Rodar algoritmo de matriz -----
-        resultado = gerar_escala_matriz(lista_militares, lista_dias, indisp, config=config)
+        # ----- Agrupar dias por TipoServico (Preta / Vermelha / …) -----
+        dias_por_tipo: dict = defaultdict(list)
+        for dia in lista_dias:
+            dias_por_tipo[dia.tipo_servico_id].append(dia)
 
-        # ----- Persistir itens -----
-        criados = 0
+        # ----- Executar ponteiro separado para cada tipo de serviço -----
+        criados    = 0
         sem_militar = 0
-        for dia, militar in resultado:
-            if militar is not None:
-                EscalaItem.objects.create(
-                    escala=escala,
-                    militar=militar,
-                    calendario_dia=dia,
-                    observacao='Gerado automaticamente (matriz)',
-                )
-                criados += 1
-                # Incrementar quadrinho
-                Quadrinho.incrementar(
-                    militar=militar,
+
+        for tipo_servico_id, dias_tipo in dias_por_tipo.items():
+            tipo_servico = dias_tipo[0].tipo_servico
+
+            # Quadrinhos acumulados ANTES deste mês para este tipo de serviço
+            quadrinhos_inicio: dict[int, int] = {}
+            for m in lista_militares:
+                qs = Quadrinho.objects.filter(
+                    militar=m,
                     tipo_escala=escala.tipo_escala,
-                    tipo_servico=dia.tipo_servico,
+                    tipo_servico=tipo_servico,
                     ano=escala.ano,
                 )
-            else:
-                sem_militar += 1
+                quadrinhos_inicio[m.id] = (
+                    qs.first().total if qs.exists() else 0
+                )
+
+            # Ponteiro salvo do mês anterior
+            ultimo_mil_id = PonteiroEscala.obter_ultimo_id(om, tipo_servico)
+
+            # Rodar algoritmo ponteiro BASE→TOPO
+            resultado, novo_ultimo_id = gerar_escala_ponteiro(
+                lista_militares=lista_militares,
+                lista_dias=dias_tipo,
+                indisponibilidades=indisp,
+                quadrinhos_inicio=quadrinhos_inicio,
+                ultimo_militar_id=ultimo_mil_id,
+                config=config,
+            )
+
+            # Salvar ponteiro para o próximo mês
+            if novo_ultimo_id:
+                PonteiroEscala.salvar(om, tipo_servico, novo_ultimo_id)
+
+            # Persistir EscalaItem e incrementar Quadrinho
+            for dia, militar in resultado:
+                if militar is not None:
+                    EscalaItem.objects.create(
+                        escala=escala,
+                        militar=militar,
+                        calendario_dia=dia,
+                        observacao='Gerado automaticamente (ponteiro BASE→TOPO)',
+                    )
+                    Quadrinho.incrementar(
+                        militar=militar,
+                        tipo_escala=escala.tipo_escala,
+                        tipo_servico=tipo_servico,
+                        ano=escala.ano,
+                    )
+                    criados += 1
+                else:
+                    sem_militar += 1
 
         if sem_militar:
             messages.warning(
                 request,
-                f'{sem_militar} dia(s) sem militar disponível (todos indisponíveis nesse dia).',
+                f'{sem_militar} dia(s) sem militar disponível (todos indisponíveis naquele dia).',
             )
         messages.success(
             request,
-            f'Escala gerada! {criados} dia(s) preenchidos automaticamente.',
+            f'Escala gerada pelo método ponteiro BASE→TOPO! '
+            f'{criados} dia(s) preenchidos.',
         )
         return redirect('escala_detalhar', escala_id=escala_id)
 

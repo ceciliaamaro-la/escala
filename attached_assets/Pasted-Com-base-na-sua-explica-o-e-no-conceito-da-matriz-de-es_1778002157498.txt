@@ -1,0 +1,43 @@
+Com base na sua explicação e no conceito da matriz de escalonamento para o sistema Indicadores ou Minha Escala, a lógica de preenchimento estruturada para o seu algoritmo de Django seria a seguinte:
+📐 Lógica de Movimentação da Matriz
+
+O algoritmo opera como um "scanner" que percorre a matriz de militares de forma persistente e sequencial.
+
+    Eixo Vertical (Linhas): Representa a antiguidade. A leitura é estritamente de baixo para cima (do mais moderno para o mais antigo).  
+
+Eixo Horizontal (Colunas): Representa a sequência de ciclos de serviço. A leitura avança para a direita somente quando o topo da coluna atual é atingido.  
+
+Ponto de Início (Gatilho): Não é aleatório. Define-se o militar com a menor quantidade de serviços acumulados (menos "quadrinhos") para identificar a coluna de partida. A partir desse ponto, o algoritmo sobe naquela coluna específica antes de avançar.  
+
+🛠️ Regras de Implementação
+
+Para que o código Django reflita exatamente o que você descreveu, a estrutura deve respeitar estes pilares:
+1. Continuidade e Persistência
+
+    Memória do Algoritmo: O sistema deve salvar o último militar escalado e a coluna correspondente para que a escala do mês seguinte (ex: Junho) comece exatamente onde a de Maio parou (ex: na coluna "M" após o S1 Carlos).  
+
+Independência de Cores: Você deve instanciar essa lógica separadamente para a Escala Preta (dias úteis) e a Escala Vermelha (finais de semana e feriados), cada uma com seu próprio contador de serviços e posição na matriz.  
+
+2. Fluxo de Decisão do Algoritmo (Pseudo-código)
+
+Para cada dia de serviço a ser preenchido:
+
+    Localizar ponteiro atual (Militar e Coluna).
+
+    Verificar disponibilidade: O militar está de férias ou dispensa? Se sim, pula para o próximo acima.
+
+    Subir na Coluna: Tenta o próximo militar acima na mesma coluna.
+
+    Virada de Coluna: Se o militar atual era o do topo (mais antigo), move para a base da próxima coluna à direita.
+
+    Gravação: Salva o militar no dia correspondente e atualiza o saldo de serviços dele.
+
+⚠️ Considerações Importantes para o Código Real
+
+Embora no exemplo a folga tenha sido ignorada, na implementação final do seu projeto Django, você precisará inserir filtros de validação entre o passo 2 e 3 citados acima:
+
+    Folga Mínima: Antes de confirmar o nome, o sistema deve checar se o intervalo de 48h (ou o padrão da OM) é respeitado.
+
+    Carga Horária: Como você mencionou no projeto "Minha Escala", o limite de 40 horas semanais deve ser uma trava lógica que impede a escalação mesmo que o militar seja o próximo da matriz.
+
+    Nota: Esta lógica de "baixo para cima" garante que os mais modernos (base) sejam acionados prioritariamente ou com mais frequência em ciclos de renovação, mantendo a hierarquia e a transparência na distribuição dos serviços.

@@ -1,0 +1,150 @@
+## 📊 Lógica de Preenchimento da Escala (baseada em matriz)
+
+### 🧠 Conceito geral
+
+A escala é preenchida utilizando uma **matriz de militares**, seguindo uma ordem fixa:
+
+* **Linhas** = militares (ordenados do mais antigo → topo, ao mais moderno → base)
+* **Colunas** = sequência de serviços (dias)
+
+---
+
+## 🔽 Regra de leitura da matriz
+
+O preenchimento segue sempre:
+
+```text
+De baixo para cima (BASE → TOPO)
+E da esquerda para direita (coluna por coluna)
+```
+
+---
+
+## 📅 Exemplo prático
+
+### 🔹 Dia 05/05
+
+* Início da leitura: **base da matriz**
+* Primeiro espaço vazio encontrado: **S1 Pire**
+* Resultado:
+
+```text
+05/05 → S1 Pire
+```
+
+---
+
+### 🔹 Dia 06/05
+
+* Continua a leitura **subindo na mesma coluna**
+* Próximo espaço vazio: **S1 Carlos**
+* Resultado:
+
+```text
+06/05 → S1 Carlos
+```
+
+---
+
+### 🔁 Quando chega ao topo
+
+* Ao atingir o topo da matriz:
+
+  * Reinicia a leitura **de baixo para cima**
+  * Porém agora na **próxima coluna à direita**
+
+---
+
+## 📌 Importante
+
+* O algoritmo percorre toda a coluna antes de avançar
+* Depois passa para a próxima coluna
+* Mantendo sempre a ordem:
+
+```text
+BASE → TOPO → próxima coluna → BASE → TOPO
+```
+
+---
+
+## ⚖️ Critério de início (coluna inicial)
+
+Para iniciar a geração da escala do mês:
+
+1. Identificar o militar com **menor quantidade de quadrinhos (serviços)**
+
+2. Localizar em qual **coluna da matriz** ele está
+
+3. Iniciar o algoritmo **nessa coluna**, e não necessariamente na primeira
+
+---
+
+### ⚠️ Regra importante
+
+```text
+Não basta escolher apenas o militar com menos serviços.
+É necessário percorrer a coluna onde ele está, de baixo para cima.
+```
+
+👉 Isso garante:
+
+* distribuição correta
+* respeito à lógica da matriz
+* continuidade da escala
+
+---
+
+## 🔄 Continuidade mensal
+
+Para o próximo mês:
+
+* O ponto de início será baseado na **última posição da escala anterior**
+* Exemplo:
+
+```text
+Último militar escalado: S1 Carlos
+→ próximo mês inicia na coluna onde ele está
+```
+
+---
+
+## 🚫 Observação sobre o exemplo
+
+Neste exemplo simplificado:
+
+* A regra de **folga mínima (48h)** foi **ignorada**
+* Apenas para demonstrar a lógica da matriz
+
+👉 Na implementação real:
+
+* Todas as regras devem ser respeitadas:
+
+  * folga mínima
+  * férias
+  * indisponibilidade
+
+---
+
+## 🎯 Separação por tipo de escala
+
+A lógica é aplicada de forma independente para cada tipo:
+
+* Escala **Preta**
+* Escala **Vermelha**
+
+```text
+Cada uma possui sua própria matriz e execução do algoritmo
+```
+
+---
+
+## ✅ Objetivo final
+
+Garantir:
+
+* distribuição equilibrada
+* previsibilidade
+* continuidade entre meses
+* transparência no algoritmo
+
+---

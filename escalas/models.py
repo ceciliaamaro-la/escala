@@ -3,6 +3,8 @@ Sistema de Escala Militar - Modelos Django
 Suporta múltiplas Organizações Militares (OM) com usuários diferenciados
 """
 
+from typing import Optional
+
 from django.db import models
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.core.exceptions import ValidationError
@@ -1101,3 +1103,70 @@ class ConfiguracaoEscala(models.Model):
     @property
     def duracao_servico_dias(self) -> int:
         return max(1, self.duracao_servico_horas // 24)
+
+
+# ============================================================================
+# PONTEIRO DE COLUNA — continuidade do algoritmo entre meses
+# ============================================================================
+
+class PonteiroEscala(models.Model):
+    """
+    Persiste o estado do ponteiro BASE→TOPO entre meses.
+
+    Um registro por (OM, TipoServico): guarda o último militar escalado
+    naquele tipo de serviço para que o mês seguinte retome de onde parou.
+    """
+
+    organizacao_militar = models.ForeignKey(
+        OrganizacaoMilitar,
+        on_delete=models.CASCADE,
+        related_name='ponteiros_escala',
+    )
+
+    tipo_servico = models.ForeignKey(
+        TipoServico,
+        on_delete=models.CASCADE,
+        related_name='ponteiros_escala',
+    )
+
+    ultimo_militar = models.ForeignKey(
+        Militar,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='+',
+        help_text='Último militar escalado neste tipo de serviço.',
+    )
+
+    atualizado_em = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'ponteiro_escala'
+        unique_together = ['organizacao_militar', 'tipo_servico']
+        verbose_name = 'Ponteiro de Escala'
+        verbose_name_plural = 'Ponteiros de Escala'
+
+    def __str__(self):
+        mil = self.ultimo_militar.nome_guerra if self.ultimo_militar else '—'
+        return (
+            f'Ponteiro {self.organizacao_militar.sigla} '
+            f'/ {self.tipo_servico.nome} → {mil}'
+        )
+
+    @classmethod
+    def obter_ultimo_id(cls, om: 'OrganizacaoMilitar', tipo_servico: 'TipoServico') -> Optional[int]:
+        """Retorna o pk do último militar escalado, ou None."""
+        try:
+            p = cls.objects.get(organizacao_militar=om, tipo_servico=tipo_servico)
+            return p.ultimo_militar_id
+        except cls.DoesNotExist:
+            return None
+
+    @classmethod
+    def salvar(cls, om: 'OrganizacaoMilitar', tipo_servico: 'TipoServico', militar_id: Optional[int]):
+        """Cria ou atualiza o ponteiro."""
+        cls.objects.update_or_create(
+            organizacao_militar=om,
+            tipo_servico=tipo_servico,
+            defaults={'ultimo_militar_id': militar_id},
+        )
