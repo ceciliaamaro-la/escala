@@ -149,6 +149,44 @@ def organizacao_form(request, om_id=None):
 
 
 @login_required
+def organizacao_excluir(request, om_id):
+    om = get_object_or_404(OrganizacaoMilitar, pk=om_id)
+    qtd_militares = om.militares.count()
+    qtd_escalas = om.escalas.count()
+    qtd_divisoes = om.divisoes.count()
+    tem_vinculos = bool(qtd_militares or qtd_escalas or qtd_divisoes)
+    if request.method == 'POST':
+        om_ativa_id = request.session.get(SESSION_KEY_OM)
+        if tem_vinculos:
+            om.ativo = False
+            om.save()
+            if om_ativa_id == om.id:
+                request.session.pop(SESSION_KEY_OM, None)
+            messages.success(
+                request,
+                f'OM {om.sigla} desativada (existem militares, escalas ou divisões '
+                'vinculados; histórico preservado).',
+            )
+        else:
+            if om_ativa_id == om.id:
+                request.session.pop(SESSION_KEY_OM, None)
+            om.delete()
+            messages.success(request, f'OM excluída.')
+        return redirect('organizacao_listar')
+    return render(
+        request,
+        'cadastro/organizacao_confirm_delete.html',
+        {
+            'om': om,
+            'qtd_militares': qtd_militares,
+            'qtd_escalas': qtd_escalas,
+            'qtd_divisoes': qtd_divisoes,
+            'tem_vinculos': tem_vinculos,
+        },
+    )
+
+
+@login_required
 @require_POST
 def organizacao_trocar(request):
     """Define a OM ativa na sessão e volta para a página anterior."""

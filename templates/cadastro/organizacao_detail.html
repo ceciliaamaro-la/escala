@@ -22,6 +22,9 @@
         <a href="{% url 'organizacao_editar' om.id %}" class="btn btn-mil">
             <i class="bi bi-pencil"></i> Editar
         </a>
+        <a href="{% url 'organizacao_excluir' om.id %}" class="btn btn-mil-danger">
+            <i class="bi bi-x-lg"></i> Excluir
+        </a>
         <a href="{% url 'organizacao_listar' %}" class="btn btn-mil-outline">
             <i class="bi bi-arrow-left"></i> Voltar
         </a>

@@ -11,6 +11,7 @@ urlpatterns = [
     path('organizacoes/nova/', views.organizacao_form, name='organizacao_novo'),
     path('organizacoes/<int:om_id>/', views.organizacao_detalhe, name='organizacao_detalhe'),
     path('organizacoes/<int:om_id>/editar/', views.organizacao_form, name='organizacao_editar'),
+    path('organizacoes/<int:om_id>/excluir/', views.organizacao_excluir, name='organizacao_excluir'),
     path('om/trocar/', views.organizacao_trocar, name='organizacao_trocar'),
 
     # Atalho para detalhe da OM ativa

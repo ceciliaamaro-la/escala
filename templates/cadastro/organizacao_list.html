@@ -75,6 +75,9 @@
                     <a href="{% url 'organizacao_editar' om.id %}" class="btn btn-sm btn-mil-outline" title="Editar">
                         <i class="bi bi-pencil"></i>
                     </a>
+                    <a href="{% url 'organizacao_excluir' om.id %}" class="btn btn-sm btn-mil-danger" title="Excluir/Desativar">
+                        <i class="bi bi-x-lg"></i>
+                    </a>
                 </td>
             </tr>
             {% empty %}

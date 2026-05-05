@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block titulo %}Excluir OM — {{ om.sigla }}{% endblock %}
+{% block conteudo %}
+<div class="page-header">
+    <h1><i class="bi bi-exclamation-triangle"></i> Excluir Organização Militar</h1>
+</div>
+<div class="card-mil">
+    <div class="card-mil-header">Confirmação</div>
+    <div class="p-4">
+        <p>Deseja excluir a OM <strong>{{ om.sigla }} — {{ om.nome }}</strong>?</p>
+        {% if tem_vinculos %}
+        <div class="alert alert-warning small">
+            <i class="bi bi-info-circle"></i>
+            Esta OM possui registros vinculados:
+            <ul class="mb-1 mt-1">
+                {% if qtd_militares %}<li><strong>{{ qtd_militares }}</strong> militar{{ qtd_militares|pluralize:"es" }}</li>{% endif %}
+                {% if qtd_divisoes %}<li><strong>{{ qtd_divisoes }}</strong> divisã{{ qtd_divisoes|pluralize:"o,ões" }}</li>{% endif %}
+                {% if qtd_escalas %}<li><strong>{{ qtd_escalas }}</strong> escala{{ qtd_escalas|pluralize }}</li>{% endif %}
+            </ul>
+            Por isso, ela será apenas <strong>desativada</strong> (não removida), preservando o histórico.
+        </div>
+        {% else %}
+        <p class="text-muted small">
+            Não há militares, divisões ou escalas vinculados — a OM será removida permanentemente.
+        </p>
+        {% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <div class="d-flex justify-content-between">
+                <a href="{% url 'organizacao_listar' %}" class="btn btn-mil-outline">Cancelar</a>
+                <button type="submit" class="btn btn-mil-danger">
+                    <i class="bi bi-x-lg"></i>
+                    {% if tem_vinculos %}Desativar{% else %}Excluir{% endif %}
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
