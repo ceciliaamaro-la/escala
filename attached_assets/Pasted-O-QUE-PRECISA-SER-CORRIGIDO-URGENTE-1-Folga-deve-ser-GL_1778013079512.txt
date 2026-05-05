@@ -1,0 +1,93 @@
+O QUE PRECISA SER CORRIGIDO (URGENTE)
+🔥 1. Folga deve ser GLOBAL
+Um serviço bloqueia TODOS os tipos de escala
+🔧 Implementação correta
+
+Trocar isso:
+
+filtrar por tipo_escala
+
+Por isso:
+
+pegar último serviço do militar (independente do tipo)
+💡 Lógica correta
+ultimo_servico = buscar_ultimo_servico(militar)
+
+data_liberacao = ultimo_servico + folga
+
+if hoje < data_liberacao:
+bloqueado
+📊 Regra final correta
+
+    Escalas são geradas separadamente (Preta e Vermelha)
+    MAS a folga é GLOBAL
+    Qualquer serviço bloqueia qualquer outro
+    Exceções só via botão "Forçar"
+    🧭 Resumo corrigido (para o Replit)
+    As escalas (Preta e Vermelha) são geradas separadamente.
+
+Porém, a regra de folga mínima (ex: 48h) é GLOBAL:
+
+    Um serviço bloqueia o militar para qualquer outro tipo de escala durante o período de folga.
+
+Exemplo:
+Se o militar fez serviço no dia 01/05, ele não pode ser escalado em nenhum tipo de serviço até o término da folga mínima.
+
+Exceções são permitidas apenas quando o item for marcado como "Forçado".
+
+O algoritmo deve sempre considerar o último serviço do militar, independente do tipo de escala, para calcular a disponibilidade.
+
+verificar e tirar duvidas, fazer perguntas para ajustar
+44 minutes ago
+
+Entendido. Antes de implementar, tenho 2 dúvidas técnicas importantes para não errar de novo:
+
+Quando gero Preto e Vermelho no mesmo clique de 'Gerar Automático', o algoritmo do Vermelho deve enxergar os dias Pretos recém-criados nessa mesma sessão?
+
+Exemplo: gerei Preto no dia 01/05 para o COSTA → ao gerar Vermelho no 02/05 (no mesmo clique), o COSTA já estaria bloqueado.
+Sim — o Vermelho deve considerar os Pretos recém-criados (folga cruzada na mesma geração)
+
+A folga global se aplica também entre TIPOS DE ESCALA (Permanência × Sobreaviso × Voo Operacional)?
+
+Exemplo: o militar fez Permanência → fica bloqueado também para Sobreaviso naquele período?
+Não — a folga global é só entre Preto/Vermelho/Roxo dentro do mesmo tipo de escala (ex: Permanência)
+43 minutes ago
+
+Perfeito, agora está claro:
+
+    Folga global entre Preto/Vermelho/Roxo dentro do mesmo tipo de escala (Permanência não bloqueia Sobreaviso)
+    Dentro da mesma geração, o Vermelho enxerga os Pretos recém-criados
+
+A implementação atual já está quase certa — só precisa de dois ajustes:
+
+    obter_indisponibilidades — carryover sem filtro de tipo_escala (mas ainda filtra por tipo_escala para ficar correto entre Permanência × Sobreaviso)
+    No loop de geração, passar os serviços já criados nesta sessão para bloquear os tipos seguintes
+
+Agora entendo exatamente o que fazer. A lógica é:
+
+    Folga global entre Preto/Vermelho/Roxo dentro do mesmo tipo de escala (Permanência × Sobreaviso são independentes ✅)
+    Dentro da mesma geração: Vermelho enxerga os Pretos já criados nesta sessão
+
+Isso significa que obter_indisponibilidades não deve filtrar por tipo_escala no carryover — deve pegar todos os serviços do mesmo tipo de escala (Permanência), independente de ser Preto ou Vermelho. E o engine precisa receber as datas já escaladas nesta sessão como bloqueio adicional.
+
+Entendido. O carryover precisa considerar todos os tipos de serviço (Preto+Vermelho+Roxo) do mesmo tipo de escala, e o engine precisa receber as datas já escaladas nesta sessão como bloqueio adicional.
+
+Agora atualizo a view para passar folga_sessao entre os tipos de serviço:
+
+Vou verificar e testar:
+
+Bom, o servidor já está rodando. Vou testar a lógica nova com um cenário que valida a folga global:
+
+Ainda tem violações. O problema está na janela de bloqueio: diff=2 significa que o militar fez serviço no dia D e dia D+2 — mas a janela é duracao(1) + folga(2) = 3 dias, então D+1, D+2 e D+3 devem estar bloqueados. Diff=2 é violação real.
+
+O bug está no engine: quando propaga folga_sessao, marca as datas dos dias deste tipo mas não as datas dos outros tipos que ainda vão ser processados. Vou corrigir para propagar o bloqueio para todas as datas possíveis, não só as do tipo atual:
+
+Agora vou testar de novo:
+
+Ainda tem violações. O problema é mais sutil: com apenas 4 militares e folga de 2 dias, o algoritmo fica sem candidatos "limpos" e aciona o fallback — que escalona o de menor folga restante, causando diff=2. Vou debugar para entender o que está acontecendo exatamente:
+
+Entendi o problema raiz: processar todo o Preto primeiro e depois todo o Vermelho é impossível de fazer retroativo. O Vermelho pode cair no dia D+2 de alguém que acabou de fazer Preto — e como o Preto já está gerado, não dá para desfazer.
+
+Solução correta: processar os dias em ordem cronológica global (intercalando Preto e Vermelho), não tipo por tipo. Assim, ao chegar no 02/05 (Vermelho), o algoritmo já sabe que MACHADO fez o Preto em 01/05 e está bloqueado.
+
+Isso requer refatorar o engine para aceitar uma lista unificada de dias com tipos mistos e usar ponteiros separados por tipo:
