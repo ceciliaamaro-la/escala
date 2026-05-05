@@ -1240,9 +1240,16 @@ def escala_gerar(request, escala_id):
             messages.error(request, 'Nenhum militar ativo nesta OM.')
             return redirect('escala_detalhar', escala_id=escala_id)
 
-        # ----- Configuração e indisponibilidades -----
+        # ----- Configuração -----
         config = ConfiguracaoEscala.obter_para_om(om)
-        indisp = obter_indisponibilidades(lista_militares, primeiro_dia, ultimo_dia, config=config)
+        tipo_escala_obj = escala.tipo_escala
+
+        # ----- Indisponibilidades filtradas por tipo_escala -----
+        # (carryover inter-mês só considera serviços do mesmo tipo de escala)
+        indisp = obter_indisponibilidades(
+            lista_militares, primeiro_dia, ultimo_dia,
+            config=config, tipo_escala=tipo_escala_obj,
+        )
 
         # ----- Agrupar dias por TipoServico (Preta / Vermelha / …) -----
         dias_por_tipo: dict = defaultdict(list)
@@ -1261,7 +1268,7 @@ def escala_gerar(request, escala_id):
             for m in lista_militares:
                 qs = Quadrinho.objects.filter(
                     militar=m,
-                    tipo_escala=escala.tipo_escala,
+                    tipo_escala=tipo_escala_obj,
                     tipo_servico=tipo_servico,
                     ano=escala.ano,
                 )
@@ -1280,6 +1287,7 @@ def escala_gerar(request, escala_id):
                 quadrinhos_inicio=quadrinhos_inicio,
                 ultimo_militar_id=ultimo_mil_id,
                 config=config,
+                tipo_escala=tipo_escala_obj,
             )
 
             # Salvar ponteiro para o próximo mês
@@ -1340,6 +1348,32 @@ def escala_limpar(request, escala_id):
         escala.itens.all().delete()
         messages.success(request, f'{total} item(ns) removido(s).')
     return redirect('escala_detalhar', escala_id=escala_id)
+
+
+@login_required
+@require_POST
+def escala_item_forcar(request, item_id):
+    """Toggle do flag forcar_escala em um EscalaItem."""
+    item = get_object_or_404(EscalaItem, pk=item_id)
+    escala = item.escala
+    if escala.status in ('rascunho', 'previsao'):
+        item.forcar_escala = not item.forcar_escala
+        item.save(update_fields=['forcar_escala'])
+        if item.forcar_escala:
+            messages.warning(
+                request,
+                f'{item.militar.nome_guerra} em {item.calendario_dia.data:%d/%m/%Y} '
+                'marcado como FORÇADO — folga mínima ignorada para este dia.',
+            )
+        else:
+            messages.success(
+                request,
+                f'Exceção removida de {item.militar.nome_guerra} '
+                f'em {item.calendario_dia.data:%d/%m/%Y}.',
+            )
+    else:
+        messages.error(request, 'Não é possível alterar itens de uma escala publicada.')
+    return redirect('escala_detalhar', escala_id=escala.id)
 
 
 @login_required

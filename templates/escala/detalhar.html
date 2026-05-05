@@ -148,12 +148,13 @@
                             <th>Tipo</th>
                             <th>Militar</th>
                             <th>Posto</th>
+                            <th style="width:60px;" class="text-center" title="Exceção — folga ignorada">Exc.</th>
                         </tr>
                     </thead>
                     <tbody>
                     {% for item in itens %}
                         {% with ts=item.calendario_dia.tipo_servico %}
-                        <tr>
+                        <tr {% if item.forcar_escala %}class="table-warning"{% endif %}>
                             <td class="fw-semibold">{{ item.calendario_dia.data|date:"d/m/Y" }}</td>
                             <td class="text-muted small">{{ item.calendario_dia.data|date:"D"|capfirst }}</td>
                             <td>
@@ -162,8 +163,29 @@
                                     {{ ts.nome }}
                                 </span>
                             </td>
-                            <td><strong>{{ item.militar.nome_guerra }}</strong></td>
+                            <td>
+                                <strong>{{ item.militar.nome_guerra }}</strong>
+                                {% if item.forcar_escala %}
+                                <span class="badge bg-warning text-dark ms-1" title="Serviço forçado — folga mínima ignorada">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> Forçado
+                                </span>
+                                {% endif %}
+                            </td>
                             <td class="small text-muted">{{ item.militar.posto.sigla }}</td>
+                            <td class="text-center">
+                                {% if pode_editar %}
+                                <form method="post" action="{% url 'escala_item_forcar' item.id %}" class="m-0">
+                                    {% csrf_token %}
+                                    <button type="submit" class="btn btn-xs p-0 border-0 bg-transparent"
+                                            title="{% if item.forcar_escala %}Remover exceção{% else %}Forçar este serviço (ignorar folga){% endif %}"
+                                            style="font-size:1.1rem;color:{% if item.forcar_escala %}#dc3545{% else %}#adb5bd{% endif %};">
+                                        <i class="bi bi-{% if item.forcar_escala %}lightning-charge-fill{% else %}lightning-charge{% endif %}"></i>
+                                    </button>
+                                </form>
+                                {% else %}
+                                    {% if item.forcar_escala %}<i class="bi bi-lightning-charge-fill text-warning"></i>{% endif %}
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endwith %}
                     {% endfor %}

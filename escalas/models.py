@@ -536,7 +536,16 @@ class TipoEscala(models.Model):
         blank=True,
         help_text="Explicação do tipo de escala"
     )
-    
+
+    folga_minima_horas = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Folga mínima específica para este tipo de escala (horas). "
+            "Se vazio, usa a configuração global da OM."
+        )
+    )
+
     ativo = models.BooleanField(default=True)
     
     class Meta:
@@ -545,6 +554,14 @@ class TipoEscala(models.Model):
     
     def __str__(self):
         return self.nome
+
+    def folga_efetiva_dias(self, config=None) -> int:
+        """Retorna a folga mínima em dias: usa o override do tipo ou o global da OM."""
+        if self.folga_minima_horas is not None:
+            return max(1, self.folga_minima_horas // 24)
+        if config is not None:
+            return config.folga_minima_dias
+        return 2  # padrão seguro
 
 
 class CalendarioDia(models.Model):
@@ -876,7 +893,15 @@ class EscalaItem(models.Model):
         blank=True,
         help_text="Ex: 'Substitui...' ou 'Justificativa de troca'"
     )
-    
+
+    forcar_escala = models.BooleanField(
+        default=False,
+        help_text=(
+            "Quando marcado, ignora a regra de folga mínima para este item. "
+            "Use para situações excepcionais (serviços consecutivos por necessidade operacional)."
+        )
+    )
+
     data_criacao = models.DateTimeField(auto_now_add=True)
     
     class Meta:

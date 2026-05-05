@@ -16,6 +16,7 @@
             <tr>
                 <th>Nome</th>
                 <th>Descrição</th>
+                <th style="width:130px;" class="text-center">Folga mínima</th>
                 <th style="width:110px;" class="text-center">Escalas</th>
                 <th style="width:110px;" class="text-center">Quadrinhos</th>
                 <th style="width:120px;">Status</th>
@@ -27,6 +28,15 @@
             <tr>
                 <td><strong>{{ tipo.nome }}</strong></td>
                 <td class="text-muted small">{{ tipo.descricao|truncatechars:80|default:"—" }}</td>
+                <td class="text-center">
+                    {% if tipo.folga_minima_horas is not None %}
+                        <span class="badge-mil" title="Folga específica deste tipo">
+                            <i class="bi bi-clock"></i> {{ tipo.folga_minima_horas }}h
+                        </span>
+                    {% else %}
+                        <span class="text-muted small">Padrão da OM</span>
+                    {% endif %}
+                </td>
                 <td class="text-center">
                     <span class="badge bg-secondary">{{ tipo.qtd_escalas }}</span>
                 </td>

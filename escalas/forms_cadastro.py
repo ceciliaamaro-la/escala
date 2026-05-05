@@ -95,13 +95,15 @@ class TipoIndisponibilidadeForm(BootstrapFormMixin, forms.ModelForm):
 class TipoEscalaForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = TipoEscala
-        fields = ['nome', 'descricao', 'ativo']
+        fields = ['nome', 'descricao', 'folga_minima_horas', 'ativo']
         widgets = {
             'descricao': forms.Textarea(attrs={'rows': 3}),
+            'folga_minima_horas': forms.NumberInput(attrs={'min': 0, 'max': 720, 'placeholder': 'Padrão da OM (ex: 48)'}),
         }
         help_texts = {
             'nome': 'Ex.: Permanência, Sobreaviso, Serviço Administrativo, Voo Operacional.',
             'descricao': 'Explicação resumida do que envolve este tipo de escala.',
+            'folga_minima_horas': 'Deixe em branco para usar a configuração global da OM. Preencha para substituir (ex: 48 = 2 dias).',
         }
 
     def clean_nome(self):
