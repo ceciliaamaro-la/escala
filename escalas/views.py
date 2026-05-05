@@ -1187,8 +1187,6 @@ def escala_gerar(request, escala_id):
     POST = executa; GET = tela de confirmação.
     """
     from calendar import monthrange
-    from collections import defaultdict
-    from .engine_escala import gerar_escala_ponteiro, obter_indisponibilidades
 
     escala = get_object_or_404(Escala, pk=escala_id)
     om = escala.organizacao_militar
@@ -1198,6 +1196,8 @@ def escala_gerar(request, escala_id):
         return redirect('escala_detalhar', escala_id=escala_id)
 
     if request.method == 'POST':
+        from .engine_escala import gerar_escala_multi_tipo, obter_indisponibilidades
+
         # Limpar itens existentes antes de regerar
         escala.itens.all().delete()
 
@@ -1229,7 +1229,7 @@ def escala_gerar(request, escala_id):
 
         lista_dias = list(dias_qs)
 
-        # ----- Militares: índice 0 = BASE (mais moderno), índice n-1 = TOPO -----
+        # ----- Militares: índice 0 = mais antigo (TOPO), último = mais moderno (BASE) -----
         lista_militares = list(
             Militar.objects.filter(organizacao_militar=om, ativo=True)
             .select_related('posto')
@@ -1244,84 +1244,71 @@ def escala_gerar(request, escala_id):
         config = ConfiguracaoEscala.obter_para_om(om)
         tipo_escala_obj = escala.tipo_escala
 
-        # ----- Indisponibilidades filtradas por tipo_escala -----
-        # (carryover inter-mês só considera serviços do mesmo tipo de escala)
+        # ----- Indisponibilidades + carryover inter-mês -----
+        # Carryover considera TODOS os tipos de serviço do mesmo tipo_escala (folga global).
         indisp = obter_indisponibilidades(
             lista_militares, primeiro_dia, ultimo_dia,
             config=config, tipo_escala=tipo_escala_obj,
         )
 
-        # ----- Agrupar dias por TipoServico (Preta / Vermelha / …) -----
-        # Ordena: Preto (dias úteis) primeiro, depois Vermelho, Roxo — garante que
-        # a folga do Preto já esteja em folga_sessao quando o Vermelho rodar.
-        dias_por_tipo: dict = defaultdict(list)
+        # ----- Quadrinhos acumulados por tipo de serviço antes deste mês -----
+        # Detecta os tipos de serviço presentes nos dias do mês
+        tipos_servico_no_mes = {}
         for dia in lista_dias:
-            dias_por_tipo[dia.tipo_servico_id].append(dia)
+            ts = dia.tipo_servico
+            if ts.nome not in tipos_servico_no_mes:
+                tipos_servico_no_mes[ts.nome] = ts
 
-        # Ordena por ordem do tipo de serviço para processamento consistente
-        tipos_ordenados = sorted(
-            dias_por_tipo.items(),
-            key=lambda kv: kv[1][0].tipo_servico.ordem,
-        )
-
-        # ----- Folga cruzada de sessão: acumula bloqueios entre tipos de serviço -----
-        # {militar_id: set(datas)} — preenchido conforme cada tipo é processado;
-        # garante que o Vermelho enxerga datas bloqueadas pelo Preto neste clique.
-        folga_sessao: dict = {m.id: set() for m in lista_militares}
-
-        criados     = 0
-        sem_militar = 0
-
-        for tipo_servico_id, dias_tipo in tipos_ordenados:
-            tipo_servico = dias_tipo[0].tipo_servico
-
-            # Quadrinhos acumulados ANTES deste mês para este tipo de serviço
-            quadrinhos_inicio: dict[int, int] = {}
+        quadrinhos_inicio = {}
+        ultimos_militares = {}
+        for nome_ts, ts in tipos_servico_no_mes.items():
+            qi = {}
             for m in lista_militares:
                 qs = Quadrinho.objects.filter(
                     militar=m,
                     tipo_escala=tipo_escala_obj,
-                    tipo_servico=tipo_servico,
+                    tipo_servico=ts,
                     ano=escala.ano,
                 )
-                quadrinhos_inicio[m.id] = (
-                    qs.first().total if qs.exists() else 0
-                )
+                qi[m.id] = qs.first().total if qs.exists() else 0
+            quadrinhos_inicio[nome_ts] = qi
+            ultimos_militares[nome_ts] = PonteiroEscala.obter_ultimo_id(om, ts)
 
-            # Ponteiro salvo do mês anterior
-            ultimo_mil_id = PonteiroEscala.obter_ultimo_id(om, tipo_servico)
+        # ----- ENGINE CRONOLÓGICO: todos os tipos em ordem de data -----
+        resultado_por_tipo, novos_ultimos = gerar_escala_multi_tipo(
+            lista_militares=lista_militares,
+            lista_dias=lista_dias,          # TODOS os dias, misturados — engine ordena
+            indisponibilidades=indisp,
+            quadrinhos_inicio=quadrinhos_inicio,
+            ultimos_militares=ultimos_militares,
+            config=config,
+            tipo_escala=tipo_escala_obj,
+        )
 
-            # Rodar algoritmo ponteiro BASE→TOPO
-            # folga_sessao é compartilhado entre os tipos: o engine o atualiza
-            # conforme escala cada dia, propagando bloqueios para os tipos seguintes.
-            resultado, novo_ultimo_id = gerar_escala_ponteiro(
-                lista_militares=lista_militares,
-                lista_dias=dias_tipo,
-                indisponibilidades=indisp,
-                quadrinhos_inicio=quadrinhos_inicio,
-                ultimo_militar_id=ultimo_mil_id,
-                config=config,
-                tipo_escala=tipo_escala_obj,
-                folga_sessao=folga_sessao,
-            )
+        # ----- Salvar ponteiros e persistir itens -----
+        criados     = 0
+        sem_militar = 0
 
-            # Salvar ponteiro para o próximo mês
-            if novo_ultimo_id:
-                PonteiroEscala.salvar(om, tipo_servico, novo_ultimo_id)
+        for nome_ts, pares in resultado_por_tipo.items():
+            ts = tipos_servico_no_mes[nome_ts]
 
-            # Persistir EscalaItem e incrementar Quadrinho
-            for dia, militar in resultado:
+            # Atualiza ponteiro para o próximo mês
+            novo_id = novos_ultimos.get(nome_ts)
+            if novo_id:
+                PonteiroEscala.salvar(om, ts, novo_id)
+
+            for dia, militar in pares:
                 if militar is not None:
                     EscalaItem.objects.create(
                         escala=escala,
                         militar=militar,
                         calendario_dia=dia,
-                        observacao='Gerado automaticamente (ponteiro BASE→TOPO)',
+                        observacao='Gerado automaticamente (cronológico global)',
                     )
                     Quadrinho.incrementar(
                         militar=militar,
-                        tipo_escala=escala.tipo_escala,
-                        tipo_servico=tipo_servico,
+                        tipo_escala=tipo_escala_obj,
+                        tipo_servico=ts,
                         ano=escala.ano,
                     )
                     criados += 1
@@ -1335,7 +1322,7 @@ def escala_gerar(request, escala_id):
             )
         messages.success(
             request,
-            f'Escala gerada pelo método ponteiro BASE→TOPO! '
+            f'Escala gerada com folga global! '
             f'{criados} dia(s) preenchidos.',
         )
         return redirect('escala_detalhar', escala_id=escala_id)
