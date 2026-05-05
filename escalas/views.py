@@ -1252,15 +1252,27 @@ def escala_gerar(request, escala_id):
         )
 
         # ----- Agrupar dias por TipoServico (Preta / Vermelha / …) -----
+        # Ordena: Preto (dias úteis) primeiro, depois Vermelho, Roxo — garante que
+        # a folga do Preto já esteja em folga_sessao quando o Vermelho rodar.
         dias_por_tipo: dict = defaultdict(list)
         for dia in lista_dias:
             dias_por_tipo[dia.tipo_servico_id].append(dia)
 
-        # ----- Executar ponteiro separado para cada tipo de serviço -----
-        criados    = 0
+        # Ordena por ordem do tipo de serviço para processamento consistente
+        tipos_ordenados = sorted(
+            dias_por_tipo.items(),
+            key=lambda kv: kv[1][0].tipo_servico.ordem,
+        )
+
+        # ----- Folga cruzada de sessão: acumula bloqueios entre tipos de serviço -----
+        # {militar_id: set(datas)} — preenchido conforme cada tipo é processado;
+        # garante que o Vermelho enxerga datas bloqueadas pelo Preto neste clique.
+        folga_sessao: dict = {m.id: set() for m in lista_militares}
+
+        criados     = 0
         sem_militar = 0
 
-        for tipo_servico_id, dias_tipo in dias_por_tipo.items():
+        for tipo_servico_id, dias_tipo in tipos_ordenados:
             tipo_servico = dias_tipo[0].tipo_servico
 
             # Quadrinhos acumulados ANTES deste mês para este tipo de serviço
@@ -1280,6 +1292,8 @@ def escala_gerar(request, escala_id):
             ultimo_mil_id = PonteiroEscala.obter_ultimo_id(om, tipo_servico)
 
             # Rodar algoritmo ponteiro BASE→TOPO
+            # folga_sessao é compartilhado entre os tipos: o engine o atualiza
+            # conforme escala cada dia, propagando bloqueios para os tipos seguintes.
             resultado, novo_ultimo_id = gerar_escala_ponteiro(
                 lista_militares=lista_militares,
                 lista_dias=dias_tipo,
@@ -1288,6 +1302,7 @@ def escala_gerar(request, escala_id):
                 ultimo_militar_id=ultimo_mil_id,
                 config=config,
                 tipo_escala=tipo_escala_obj,
+                folga_sessao=folga_sessao,
             )
 
             # Salvar ponteiro para o próximo mês

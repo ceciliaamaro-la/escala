@@ -1,36 +1,192 @@
 """
 Motor de geração automática de escala — Algoritmo de Ponteiro por Coluna.
 
-╔══════════════════════════════════════════════════════════════════════╗
-║  LÓGICA DA MATRIZ                                                    ║
-║                                                                      ║
-║  Linhas  = militares, do mais moderno (índice 0, BASE) ao           ║
-║            mais antigo (índice n-1, TOPO)                            ║
-║                                                                      ║
-║  Colunas = rodadas de serviço. Na coluna k cada militar recebe       ║
-║            seu (k+1)-ésimo serviço.                                  ║
-║                                                                      ║
-║  Leitura: BASE → TOPO dentro de cada coluna, depois avança          ║
-║           para a próxima coluna à direita e reinicia da BASE.        ║
-║                                                                      ║
-║  Regra de folga:                                                     ║
-║    • Cada serviço dura 24h (configurável). Após encerrar, o          ║
-║      militar cumpre folga mínima antes do próximo serviço.           ║
-║    • A folga é contada dentro do MESMO tipo de escala               ║
-║      (Permanência não bloqueia Sobreaviso e vice-versa).             ║
-║    • Cada TipoEscala pode ter sua própria folga_minima_horas;        ║
-║      se vazio, usa a configuração global da OM.                      ║
-║    • Fallback: quando todos estão em folga obrigatória,              ║
-║      escala o que tem menos tempo de folga faltando.                 ║
-╚══════════════════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════════════════╗
+║  LÓGICA DA MATRIZ                                                        ║
+║                                                                          ║
+║  Linhas  = militares, do mais moderno (índice 0, BASE) ao               ║
+║            mais antigo (índice n-1, TOPO)                                ║
+║                                                                          ║
+║  Colunas = rodadas de serviço por tipo de serviço.                       ║
+║                                                                          ║
+║  Regra de folga GLOBAL (dentro do mesmo tipo de escala):                ║
+║    • Qualquer serviço (Preto, Vermelho ou Roxo) bloqueia o militar      ║
+║      para TODOS os outros tipos de serviço pelo período de folga.       ║
+║    • Permanência e Sobreaviso têm filas INDEPENDENTES entre si.         ║
+║    • Exceção: itens com forcar_escala=True não geram carryover.         ║
+║                                                                          ║
+║  Processamento CRONOLÓGICO:                                              ║
+║    • Os dias (Preto, Vermelho, Roxo…) são processados em ordem de data. ║
+║    • Um bloqueio de folga gerado por qualquer tipo de serviço é         ║
+║      imediatamente visível para todos os tipos seguintes na mesma data   ║
+║      ou em datas posteriores — eliminando violações retroativas.        ║
+║    • Cada tipo de serviço mantém seu próprio ponteiro/contagem.         ║
+╚══════════════════════════════════════════════════════════════════════════╝
 """
 
 from datetime import date as date_type, timedelta
+from collections import defaultdict
 from typing import Dict, List, Optional, Set, Tuple
 
 
 # ---------------------------------------------------------------------------
-# Algoritmo principal: ponteiro por coluna
+# Algoritmo principal: processamento cronológico unificado
+# ---------------------------------------------------------------------------
+
+def gerar_escala_multi_tipo(
+    lista_militares: list,
+    lista_dias: list,                     # TODOS os dias do mês, ordem cronológica
+    indisponibilidades: Dict[int, Set[date_type]],
+    quadrinhos_inicio: Dict[str, Dict[int, int]],  # {tipo_servico_nome: {mil_id: n}}
+    ultimos_militares: Dict[str, Optional[int]],   # {tipo_servico_nome: ultimo_mil_id}
+    config=None,
+    tipo_escala=None,
+) -> Tuple[Dict[str, List[Tuple]], Dict[str, Optional[int]]]:
+    """
+    Gera a escala para TODOS os tipos de serviço de um mês em ordem cronológica.
+
+    Args:
+        lista_militares      : militares ordenados [mais_moderno … mais_antigo].
+        lista_dias           : CalendarioDia de todos os tipos do mês, ordem cronológica.
+        indisponibilidades   : {militar_id: set(datas)} — férias + carryover inter-mês.
+        quadrinhos_inicio    : {tipo_servico_nome: {militar_id: n}} contagem pré-mês.
+        ultimos_militares    : {tipo_servico_nome: ultimo_mil_id} ponteiro mês anterior.
+        config               : ConfiguracaoEscala.
+        tipo_escala          : TipoEscala (pode ter folga_minima_horas específica).
+
+    Returns:
+        (resultado_por_tipo, novos_ultimos)
+        resultado_por_tipo = {tipo_servico_nome: [(CalendarioDia, Militar|None), …]}
+        novos_ultimos      = {tipo_servico_nome: ultimo_mil_id}
+    """
+    if not lista_militares or not lista_dias:
+        return {}, {}
+
+    n = len(lista_militares)
+    idx_por_id = {m.id: i for i, m in enumerate(lista_militares)}
+
+    # ── Janela de folga ──────────────────────────────────────────────────────
+    duracao_dias = 1
+    folga_dias   = 2
+    if config is not None:
+        duracao_dias = config.duracao_servico_dias
+        folga_dias   = config.folga_minima_dias
+    if tipo_escala is not None and tipo_escala.folga_minima_horas is not None:
+        folga_dias = max(1, tipo_escala.folga_minima_horas // 24)
+    janela_bloqueio = duracao_dias + folga_dias
+
+    # ── Estado por tipo de serviço ───────────────────────────────────────────
+    # counts[tipo][mil_id] = serviços atribuídos neste mês para este tipo
+    counts: Dict[str, Dict[int, int]] = {}
+    # ponteiro[tipo] = (idx, col) — posição atual do ponteiro
+    ponteiros: Dict[str, Tuple[int, int]] = {}
+    # último atribuído por tipo
+    novos_ultimos: Dict[str, Optional[int]] = {}
+
+    tipos_servico = {}  # nome -> objeto TipoServico
+    for dia in lista_dias:
+        ts = dia.tipo_servico
+        nome = ts.nome
+        if nome not in tipos_servico:
+            tipos_servico[nome] = ts
+            qi = quadrinhos_inicio.get(nome, {})
+            counts[nome] = {m.id: qi.get(m.id, 0) for m in lista_militares}
+
+            # Determinar ponto de partida do ponteiro
+            ultimo_id = ultimos_militares.get(nome)
+            min_count = min(counts[nome].values())
+            if ultimo_id and ultimo_id in idx_por_id:
+                start_idx = (idx_por_id[ultimo_id] + 1) % n
+                start_col = min_count
+            else:
+                start_col = min_count
+                start_idx = next(
+                    (i for i, m in enumerate(lista_militares)
+                     if counts[nome][m.id] == min_count), 0
+                )
+            ponteiros[nome] = (start_idx, start_col)
+            novos_ultimos[nome] = ultimo_id
+
+    # ── Bloqueio global de folga (compartilhado entre TODOS os tipos) ────────
+    # {militar_id: set(datas bloqueadas por qualquer serviço já atribuído)}
+    folga_global: Dict[int, Set[date_type]] = {m.id: set() for m in lista_militares}
+
+    # ── Resultados ───────────────────────────────────────────────────────────
+    resultado: Dict[str, List[Tuple]] = {nome: [] for nome in tipos_servico}
+
+    # ── Processamento cronológico ────────────────────────────────────────────
+    for dia in sorted(lista_dias, key=lambda d: d.data):
+        data = dia.data
+        nome_tipo = dia.tipo_servico.nome
+        cnt   = counts[nome_tipo]
+        idx, col = ponteiros[nome_tipo]
+
+        atribuido = None
+
+        # ── Ponteiro: procura militar disponível ─────────────────────────────
+        tentativas = 0
+        pos    = idx
+        coluna = col
+
+        while tentativas < n * 3:
+            if pos >= n:
+                pos    = 0
+                coluna += 1
+
+            militar   = lista_militares[pos]
+            mil_count = cnt[militar.id]
+
+            if mil_count == coluna:
+                bloqueado = (
+                    data in indisponibilidades.get(militar.id, set())
+                    or data in folga_global.get(militar.id, set())
+                )
+                if not bloqueado:
+                    atribuido = militar
+                    break
+
+            pos        += 1
+            tentativas += 1
+
+        # ── Fallback: todos em folga/indisponibilidade ───────────────────────
+        if atribuido is None:
+            candidatos = []
+            for m in lista_militares:
+                if data in indisponibilidades.get(m.id, set()):
+                    continue  # afastamento real — nunca viola
+                folgas_m = folga_global.get(m.id, set())
+                if data in folgas_m:
+                    bloqueado_ate = max(
+                        (d for d in folgas_m if d >= data), default=data
+                    )
+                    dias_faltando = (bloqueado_ate - data).days
+                else:
+                    dias_faltando = 0
+                candidatos.append((dias_faltando, idx_por_id[m.id], m))
+            if candidatos:
+                candidatos.sort()
+                atribuido = candidatos[0][2]
+
+        # ── Registra ─────────────────────────────────────────────────────────
+        if atribuido:
+            cnt[atribuido.id] += 1
+            novos_ultimos[nome_tipo] = atribuido.id
+
+            pos_atribuido = idx_por_id[atribuido.id]
+            ponteiros[nome_tipo] = (pos_atribuido + 1, cnt[atribuido.id] - 1)
+
+            # Propaga folga GLOBAL (bloqueia para todos os tipos desta sessão)
+            if janela_bloqueio > 0:
+                for k in range(1, janela_bloqueio + 1):
+                    folga_global[atribuido.id].add(data + timedelta(days=k))
+
+        resultado[nome_tipo].append((dia, atribuido))
+
+    return resultado, novos_ultimos
+
+
+# ---------------------------------------------------------------------------
+# Função legada — mantida para compatibilidade (não é mais chamada pela view)
 # ---------------------------------------------------------------------------
 
 def gerar_escala_ponteiro(
@@ -41,154 +197,28 @@ def gerar_escala_ponteiro(
     ultimo_militar_id: Optional[int] = None,
     config=None,
     tipo_escala=None,
+    folga_sessao: Optional[Dict[int, Set[date_type]]] = None,
 ) -> Tuple[List[Tuple], Optional[int]]:
-    """
-    Gera a escala para UMA sequência de dias (todos do mesmo tipo de serviço)
-    usando o algoritmo de ponteiro BASE→TOPO, coluna por coluna.
-
-    Args:
-        lista_militares  : militares ordenados [mais_moderno … mais_antigo].
-                           Índice 0 = base (mais moderno/junior).
-        lista_dias       : CalendarioDia a preencher, ordem cronológica.
-                           Devem ser todos do mesmo TipoServico.
-        indisponibilidades: {militar_id: set(datas bloqueadas)}.
-                           Já inclui carryover do mês anterior FILTRADO
-                           pelo mesmo tipo de escala.
-        quadrinhos_inicio: {militar_id: n_servicos} — contagem ANTES deste mês.
-        ultimo_militar_id: pk do último militar escalado no mês anterior
-                           para este tipo de serviço (None = início do sistema).
-        config           : ConfiguracaoEscala (folga global da OM).
-        tipo_escala      : TipoEscala (pode ter folga_minima_horas específica).
-
-    Returns:
-        (resultado, novo_ultimo_militar_id)
-        resultado = [(CalendarioDia, Militar|None), …]
-    """
+    """Wrapper legado — encapsula gerar_escala_multi_tipo para um único tipo."""
     if not lista_militares or not lista_dias:
         return [], ultimo_militar_id
 
-    n = len(lista_militares)
+    nome_tipo = lista_dias[0].tipo_servico.nome
 
-    # Cópia local dos contadores (serão incrementados conforme atribuição)
-    counts = {m.id: quadrinhos_inicio.get(m.id, 0) for m in lista_militares}
-
-    # Índice → militar (base=0, topo=n-1)
-    idx_por_id = {m.id: i for i, m in enumerate(lista_militares)}
-
-    # ── Determinar janela de folga ───────────────────────────────────────────
-    # Prioridade: folga específica do TipoEscala > global da OM > padrão 2 dias
-    duracao_dias = 1  # padrão: 24h = 1 dia
-    folga_dias   = 2  # padrão: 48h = 2 dias
-
-    if config is not None:
-        duracao_dias = config.duracao_servico_dias
-        folga_dias   = config.folga_minima_dias
-
-    if tipo_escala is not None and tipo_escala.folga_minima_horas is not None:
-        folga_dias = max(1, tipo_escala.folga_minima_horas // 24)
-
-    # janela_bloqueio: quantos dias após o início do serviço o militar fica impedido
-    # serviço começa no dia D → fica bloqueado em D+1 … D+(duracao_dias+folga_dias)
-    janela_bloqueio = duracao_dias + folga_dias
-
-    # ── Determinar ponteiro de início ───────────────────────────────────────
-    min_count = min(counts.values())
-
-    if ultimo_militar_id and ultimo_militar_id in idx_por_id:
-        ultimo_idx  = idx_por_id[ultimo_militar_id]
-        proximo_idx = ultimo_idx + 1
-        if proximo_idx >= n:
-            proximo_idx = 0
-        start_idx = proximo_idx
-        start_col = min_count
-    else:
-        start_col = min_count
-        start_idx = next(
-            (i for i, m in enumerate(lista_militares) if counts[m.id] == min_count),
-            0,
-        )
-
-    # ── Folga intra-mês: datas bloqueadas pelos serviços gerados NESTE mês ──
-    # {militar_id: set(datas bloqueadas pela folga gerada aqui)}
-    folga_intra: Dict[int, Set[date_type]] = {m.id: set() for m in lista_militares}
-
-    # ── Processamento cronológico ────────────────────────────────────────────
-    resultado: List[Tuple] = []
-    ultimo_atribuido_id: Optional[int] = ultimo_militar_id
-
-    idx = start_idx
-    col = start_col
-
-    for dia in lista_dias:
-        data = dia.data
-        atribuido = None
-
-        # ── Tenta encontrar militar disponível na ordem ponteiro ─────────────
-        tentativas = 0
-        pos = idx
-        coluna = col
-
-        while tentativas < n * 3:
-            if pos >= n:
-                pos    = 0
-                coluna += 1
-
-            militar = lista_militares[pos]
-            mil_count = counts[militar.id]
-
-            if mil_count == coluna:
-                bloqueado_indisp = data in indisponibilidades.get(militar.id, set())
-                bloqueado_folga  = data in folga_intra.get(militar.id, set())
-                if not bloqueado_indisp and not bloqueado_folga:
-                    atribuido = militar
-                    break
-
-            pos        += 1
-            tentativas += 1
-
-        # ── Fallback: todos em folga → escala o com menos folga restante ─────
-        if atribuido is None:
-            candidatos_fallback = []
-            for m in lista_militares:
-                if data in indisponibilidades.get(m.id, set()):
-                    continue  # indisponibilidade real (férias/afastamento) — não viola
-                if data in folga_intra.get(m.id, set()):
-                    # calcula quanto tempo de folga ainda falta (menor = preferido)
-                    bloqueado_ate = max(
-                        (d for d in folga_intra[m.id] if d >= data),
-                        default=data,
-                    )
-                    dias_faltando = (bloqueado_ate - data).days
-                    candidatos_fallback.append((dias_faltando, idx_por_id[m.id], m))
-            if candidatos_fallback:
-                candidatos_fallback.sort()
-                atribuido = candidatos_fallback[0][2]
-
-        # ── Registra resultado ───────────────────────────────────────────────
-        if atribuido:
-            counts[atribuido.id] += 1
-            ultimo_atribuido_id = atribuido.id
-
-            # Avança ponteiro
-            pos_atribuido = idx_por_id[atribuido.id]
-            idx = pos_atribuido + 1
-            col = counts[atribuido.id] - 1  # coluna que acabou de completar
-
-            # Marca folga intra-mês
-            if janela_bloqueio > 0:
-                dias_lista_datas = {d.data for d in lista_dias}
-                for k in range(1, janela_bloqueio + 1):
-                    data_bloqueada = data + timedelta(days=k)
-                    if data_bloqueada in dias_lista_datas:
-                        folga_intra[atribuido.id].add(data_bloqueada)
-
-        resultado.append((dia, atribuido))
-
-    return resultado, ultimo_atribuido_id
+    resultado_map, novos = gerar_escala_multi_tipo(
+        lista_militares=lista_militares,
+        lista_dias=lista_dias,
+        indisponibilidades=indisponibilidades,
+        quadrinhos_inicio={nome_tipo: quadrinhos_inicio},
+        ultimos_militares={nome_tipo: ultimo_militar_id},
+        config=config,
+        tipo_escala=tipo_escala,
+    )
+    return resultado_map.get(nome_tipo, []), novos.get(nome_tipo)
 
 
 # ---------------------------------------------------------------------------
-# Indisponibilidades + carryover inter-mês (filtrado por tipo_escala)
+# Indisponibilidades + carryover inter-mês
 # ---------------------------------------------------------------------------
 
 def obter_indisponibilidades(
@@ -199,17 +229,14 @@ def obter_indisponibilidades(
     tipo_escala=None,
 ) -> Dict[int, Set[date_type]]:
     """
-    Retorna {militar_id: set(datas bloqueadas)} para o intervalo [data_inicio, data_fim].
+    Retorna {militar_id: set(datas bloqueadas)} para [data_inicio, data_fim].
 
-    Aplica:
-      1. Indisponibilidades diretas (férias, licença, etc.) — bloqueiam em QUALQUER escala.
+    Fontes:
+      1. Indisponibilidades diretas (férias, licença…).
       2. Bloqueio pré/pós-indisponibilidade (configurável).
-      3. Folga mínima pós-serviço carryover do mês anterior — filtrado pelo
-         MESMO tipo_escala, pois cada tipo tem fila independente.
-
-    Args:
-        tipo_escala: TipoEscala — se fornecido, o carryover só considera serviços
-                     desta mesma escala. Se None, considera todos (legado).
+      3. Carryover inter-mês: QUALQUER serviço do mesmo tipo_escala no mês
+         anterior bloqueia (Preto+Vermelho+Roxo = folga global).
+         Itens com forcar_escala=True não geram carryover.
     """
     from .models import EscalaItem, Indisponibilidade
 
@@ -222,16 +249,13 @@ def obter_indisponibilidades(
         config = ConfiguracaoEscala.obter_para_om(om)
 
     duracao_dias = config.duracao_servico_dias
-
-    # Folga efetiva: usa override do tipo de escala se existir
     if tipo_escala is not None and tipo_escala.folga_minima_horas is not None:
         folga_min_dias = max(1, tipo_escala.folga_minima_horas // 24)
     else:
         folga_min_dias = config.folga_minima_dias
 
     janela_total = duracao_dias + folga_min_dias
-
-    militar_ids = [m.id for m in militares]
+    militar_ids  = [m.id for m in militares]
     resultado: Dict[int, Set[date_type]] = {}
     margem = timedelta(days=janela_total)
 
@@ -244,8 +268,7 @@ def obter_indisponibilidades(
     ).values_list('militar_id', 'data_inicio', 'data_fim')
 
     for militar_id, ini, fim in registros:
-        if militar_id not in resultado:
-            resultado[militar_id] = set()
+        resultado.setdefault(militar_id, set())
 
         cursor = ini
         while cursor <= fim:
@@ -254,48 +277,35 @@ def obter_indisponibilidades(
             cursor += timedelta(days=1)
 
         if config.bloquear_pre_ferias:
-            pre_inicio = ini - timedelta(days=folga_min_dias)
-            pre_fim    = ini - timedelta(days=1)
-            cursor = max(data_inicio, pre_inicio)
-            while cursor <= min(data_fim, pre_fim):
+            cursor = max(data_inicio, ini - timedelta(days=folga_min_dias))
+            while cursor <= min(data_fim, ini - timedelta(days=1)):
                 resultado[militar_id].add(cursor)
                 cursor += timedelta(days=1)
 
         if config.bloquear_pos_ferias:
-            pos_inicio = fim + timedelta(days=1)
-            pos_fim    = fim + timedelta(days=folga_min_dias)
-            cursor = max(data_inicio, pos_inicio)
-            while cursor <= min(data_fim, pos_fim):
+            cursor = max(data_inicio, fim + timedelta(days=1))
+            while cursor <= min(data_fim, fim + timedelta(days=folga_min_dias)):
                 resultado[militar_id].add(cursor)
                 cursor += timedelta(days=1)
 
-    # ── 2. Carryover inter-mês: serviços anteriores que ainda bloqueiam ──────
-    # IMPORTANTE: filtrado pelo mesmo tipo_escala para que Preto não bloqueie
-    # Vermelho e vice-versa.
+    # ── 2. Carryover inter-mês ───────────────────────────────────────────────
+    # TODOS os tipos de serviço (Preto+Vermelho+Roxo) do mesmo tipo_escala
+    # são considerados — a folga é global dentro do tipo_escala.
     lookback = data_inicio - timedelta(days=janela_total)
-    qs_anteriores = EscalaItem.objects.filter(
+    qs = EscalaItem.objects.filter(
         militar_id__in=militar_ids,
         calendario_dia__data__gte=lookback,
         calendario_dia__data__lt=data_inicio,
-        forcar_escala=False,  # serviços forçados não geram folga
+        forcar_escala=False,
     )
-
     if tipo_escala is not None:
-        qs_anteriores = qs_anteriores.filter(
-            escala__tipo_escala=tipo_escala,
-        )
+        qs = qs.filter(escala__tipo_escala=tipo_escala)
 
-    items_anteriores = qs_anteriores.values_list(
-        'militar_id', 'calendario_dia__data'
-    )
-
-    for militar_id, data_servico in items_anteriores:
-        if militar_id not in resultado:
-            resultado[militar_id] = set()
-        bloquear_inicio = data_servico + timedelta(days=1)
-        bloquear_fim    = data_servico + timedelta(days=janela_total)
-        cursor = max(data_inicio, bloquear_inicio)
-        while cursor <= min(data_fim, bloquear_fim):
+    for militar_id, data_servico in qs.values_list('militar_id', 'calendario_dia__data'):
+        resultado.setdefault(militar_id, set())
+        cursor = max(data_inicio, data_servico + timedelta(days=1))
+        fim_blq = data_servico + timedelta(days=janela_total)
+        while cursor <= min(data_fim, fim_blq):
             resultado[militar_id].add(cursor)
             cursor += timedelta(days=1)
 
