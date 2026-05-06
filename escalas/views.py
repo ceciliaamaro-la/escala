@@ -1161,18 +1161,27 @@ def escala_detalhar(request, escala_id):
 
     itens = (
         escala.itens
-        .select_related('militar__posto', 'calendario_dia__tipo_servico')
+        .select_related('militar__posto', 'calendario_dia__tipo_servico', 'substituto__posto')
         .order_by('calendario_dia__data')
     )
 
     # Contagem por militar
     contagem: dict = {}
     for item in itens:
-        m = item.militar
+        m = item.substituto if item.substituto else item.militar
         contagem.setdefault(m, 0)
         contagem[m] += 1
 
     contagem_lista = sorted(contagem.items(), key=lambda x: -x[1])
+
+    # Lista de militares ativos da OM para os selects
+    militares_om = list(
+        Militar.objects.filter(
+            organizacao_militar=escala.organizacao_militar, ativo=True
+        )
+        .select_related('posto')
+        .order_by('posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
+    )
 
     return render(request, 'escala/detalhar.html', {
         'escala': escala,
@@ -1180,6 +1189,203 @@ def escala_detalhar(request, escala_id):
         'contagem_lista': contagem_lista,
         'nomes_meses': NOMES_MESES,
         'pode_editar': escala.status in ('rascunho', 'previsao'),
+        'militares_om': militares_om,
+    })
+
+
+@login_required
+@require_POST
+def escala_item_trocar_militar(request, item_id):
+    """
+    Rascunho/Previsão: troca o militar de um item.
+    Atualiza o quadrinho: decrementa o militar anterior e incrementa o novo.
+    Chamado via AJAX (fetch) com body JSON {'militar_id': <id>}.
+    """
+    from django.http import JsonResponse
+    import json
+
+    item = get_object_or_404(EscalaItem, pk=item_id)
+    escala = item.escala
+
+    if escala.status not in ('rascunho', 'previsao'):
+        return JsonResponse({'ok': False, 'erro': 'Escala não editável.'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+        novo_militar_id = int(data.get('militar_id', 0))
+    except (ValueError, KeyError):
+        return JsonResponse({'ok': False, 'erro': 'Dados inválidos.'}, status=400)
+
+    if novo_militar_id == item.militar_id:
+        return JsonResponse({'ok': True, 'mensagem': 'Sem alteração.'})
+
+    novo_militar = get_object_or_404(
+        Militar, pk=novo_militar_id, organizacao_militar=escala.organizacao_militar, ativo=True
+    )
+
+    militar_anterior = item.militar
+    tipo_escala = escala.tipo_escala
+    tipo_servico = item.calendario_dia.tipo_servico
+    ano = escala.ano
+
+    # Decrementa quadrinho do militar anterior
+    try:
+        qd_anterior = Quadrinho.objects.get(
+            militar=militar_anterior,
+            tipo_escala=tipo_escala,
+            tipo_servico=tipo_servico,
+            ano=ano,
+        )
+        if qd_anterior.quantidade > 0:
+            qd_anterior.quantidade -= 1
+            qd_anterior.save(update_fields=['quantidade'])
+    except Quadrinho.DoesNotExist:
+        pass
+
+    # Incrementa quadrinho do novo militar
+    Quadrinho.incrementar(
+        militar=novo_militar,
+        tipo_escala=tipo_escala,
+        tipo_servico=tipo_servico,
+        ano=ano,
+    )
+
+    # Atualiza o item — bypass da validação de indisponibilidade via update_fields
+    item.militar = novo_militar
+    item.save(update_fields=['militar'])
+
+    return JsonResponse({
+        'ok': True,
+        'nome_guerra': novo_militar.nome_guerra,
+        'posto_sigla': novo_militar.posto.sigla,
+    })
+
+
+@login_required
+@require_POST
+def escala_item_definir_substituto(request, item_id):
+    """
+    Escala Oficial: define o substituto de um item.
+    Transfere o quadrinho: decrementa o titular, incrementa o substituto.
+    Remove substituto se militar_id='' for enviado.
+    """
+    from django.http import JsonResponse
+    import json
+
+    item = get_object_or_404(
+        EscalaItem.objects.select_related(
+            'militar__posto', 'substituto__posto',
+            'calendario_dia__tipo_servico', 'escala__tipo_escala',
+        ),
+        pk=item_id,
+    )
+    escala = item.escala
+
+    if escala.status != 'publicada':
+        return JsonResponse({'ok': False, 'erro': 'Apenas em Escala Oficial.'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+        novo_sub_id = data.get('militar_id', '')
+    except (ValueError, KeyError):
+        return JsonResponse({'ok': False, 'erro': 'Dados inválidos.'}, status=400)
+
+    tipo_escala = escala.tipo_escala
+    tipo_servico = item.calendario_dia.tipo_servico
+    ano = escala.ano
+
+    substituto_anterior = item.substituto
+
+    # --- Remover substituto ---
+    if novo_sub_id == '' or novo_sub_id is None:
+        if substituto_anterior:
+            # Devolve quadrinho ao titular original
+            try:
+                qd_sub = Quadrinho.objects.get(
+                    militar=substituto_anterior,
+                    tipo_escala=tipo_escala,
+                    tipo_servico=tipo_servico,
+                    ano=ano,
+                )
+                if qd_sub.quantidade > 0:
+                    qd_sub.quantidade -= 1
+                    qd_sub.save(update_fields=['quantidade'])
+            except Quadrinho.DoesNotExist:
+                pass
+            Quadrinho.incrementar(
+                militar=item.militar,
+                tipo_escala=tipo_escala,
+                tipo_servico=tipo_servico,
+                ano=ano,
+            )
+            item.substituto = None
+            item.save(update_fields=['substituto'])
+        return JsonResponse({'ok': True, 'removido': True})
+
+    try:
+        novo_sub_id = int(novo_sub_id)
+    except ValueError:
+        return JsonResponse({'ok': False, 'erro': 'ID inválido.'}, status=400)
+
+    if novo_sub_id == item.militar_id:
+        return JsonResponse({'ok': False, 'erro': 'Substituto não pode ser o próprio titular.'}, status=400)
+
+    novo_sub = get_object_or_404(
+        Militar, pk=novo_sub_id, organizacao_militar=escala.organizacao_militar, ativo=True
+    )
+
+    # Se já havia um substituto anterior, reverte seu quadrinho
+    if substituto_anterior and substituto_anterior.pk != novo_sub.pk:
+        try:
+            qd_sub_ant = Quadrinho.objects.get(
+                militar=substituto_anterior,
+                tipo_escala=tipo_escala,
+                tipo_servico=tipo_servico,
+                ano=ano,
+            )
+            if qd_sub_ant.quantidade > 0:
+                qd_sub_ant.quantidade -= 1
+                qd_sub_ant.save(update_fields=['quantidade'])
+        except Quadrinho.DoesNotExist:
+            pass
+        # Devolve ao titular original
+        Quadrinho.incrementar(
+            militar=item.militar,
+            tipo_escala=tipo_escala,
+            tipo_servico=tipo_servico,
+            ano=ano,
+        )
+
+    # Se é substituição nova (não havia sub antes), decrementa o titular
+    if not substituto_anterior:
+        try:
+            qd_titular = Quadrinho.objects.get(
+                militar=item.militar,
+                tipo_escala=tipo_escala,
+                tipo_servico=tipo_servico,
+                ano=ano,
+            )
+            if qd_titular.quantidade > 0:
+                qd_titular.quantidade -= 1
+                qd_titular.save(update_fields=['quantidade'])
+        except Quadrinho.DoesNotExist:
+            pass
+
+    # Incrementa quadrinho do novo substituto
+    Quadrinho.incrementar(
+        militar=novo_sub,
+        tipo_escala=tipo_escala,
+        tipo_servico=tipo_servico,
+        ano=ano,
+    )
+
+    item.substituto = novo_sub
+    item.save(update_fields=['substituto'])
+
+    return JsonResponse({
+        'ok': True,
+        'nome_guerra': novo_sub.nome_guerra,
+        'posto_sigla': novo_sub.posto.sigla,
     })
 
 

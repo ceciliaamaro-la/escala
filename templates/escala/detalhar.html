@@ -138,6 +138,11 @@
             <div class="card-header fw-semibold">
                 <i class="bi bi-table"></i> Escala do Mês
                 <span class="badge bg-primary ms-2">{{ itens|length }} dia(s)</span>
+                {% if pode_editar %}
+                <span class="badge bg-warning text-dark ms-1" title="Selecione outro militar para trocar automaticamente">
+                    <i class="bi bi-pencil"></i> Edição rápida ativa
+                </span>
+                {% endif %}
             </div>
             <div class="table-responsive">
                 <table class="table table-sm table-hover mb-0 align-middle">
@@ -148,13 +153,20 @@
                             <th>Tipo</th>
                             <th>Militar</th>
                             <th>Posto</th>
+                            {% if escala.status == 'publicada' %}
+                            <th>Substituto</th>
+                            {% endif %}
+                            {% if pode_editar %}
                             <th style="width:60px;" class="text-center" title="Exceção — folga ignorada">Exc.</th>
+                            {% elif escala.status == 'publicada' %}
+                            <th style="width:80px;" class="text-center">Ação</th>
+                            {% endif %}
                         </tr>
                     </thead>
                     <tbody>
                     {% for item in itens %}
                         {% with ts=item.calendario_dia.tipo_servico %}
-                        <tr {% if item.forcar_escala %}class="table-warning"{% endif %}>
+                        <tr {% if item.forcar_escala and pode_editar %}class="table-warning"{% endif %}>
                             <td class="fw-semibold">{{ item.calendario_dia.data|date:"d/m/Y" }}</td>
                             <td class="text-muted small">{{ item.calendario_dia.data|date:"D"|capfirst }}</td>
                             <td>
@@ -163,17 +175,59 @@
                                     {{ ts.nome }}
                                 </span>
                             </td>
+
+                            {# ---- Coluna Militar: select no rascunho/previsão, texto riscado na oficial com sub ---- #}
                             <td>
-                                <strong>{{ item.militar.nome_guerra }}</strong>
-                                {% if item.forcar_escala %}
-                                <span class="badge bg-warning text-dark ms-1" title="Serviço forçado — folga mínima ignorada">
-                                    <i class="bi bi-exclamation-triangle-fill"></i> Forçado
-                                </span>
+                                {% if pode_editar %}
+                                    {# SELECT com auto-save via AJAX #}
+                                    <select class="form-select form-select-sm select-trocar-militar"
+                                            data-item-id="{{ item.id }}"
+                                            style="min-width:130px;">
+                                        {% for m in militares_om %}
+                                        <option value="{{ m.id }}"
+                                            {% if m.id == item.militar_id %}selected{% endif %}>
+                                            {{ m.nome_guerra }} ({{ m.posto.sigla }})
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                {% elif escala.status == 'publicada' and item.substituto %}
+                                    <span class="text-decoration-line-through text-muted">{{ item.militar.nome_guerra }}</span>
+                                {% else %}
+                                    <strong>{{ item.militar.nome_guerra }}</strong>
+                                    {% if item.forcar_escala %}
+                                    <span class="badge bg-warning text-dark ms-1" title="Serviço forçado — folga mínima ignorada">
+                                        <i class="bi bi-exclamation-triangle-fill"></i> Forçado
+                                    </span>
+                                    {% endif %}
                                 {% endif %}
                             </td>
-                            <td class="small text-muted">{{ item.militar.posto.sigla }}</td>
-                            <td class="text-center">
+
+                            {# ---- Posto ---- #}
+                            <td class="small text-muted">
                                 {% if pode_editar %}
+                                    <span class="posto-label-{{ item.id }}">{{ item.militar.posto.sigla }}</span>
+                                {% elif escala.status == 'publicada' and item.substituto %}
+                                    <span class="text-decoration-line-through text-muted">{{ item.militar.posto.sigla }}</span>
+                                {% else %}
+                                    {{ item.militar.posto.sigla }}
+                                {% endif %}
+                            </td>
+
+                            {# ---- Coluna Substituto (apenas Escala Oficial) ---- #}
+                            {% if escala.status == 'publicada' %}
+                            <td class="substituto-cell-{{ item.id }}">
+                                {% if item.substituto %}
+                                    <strong class="text-success">{{ item.substituto.nome_guerra }}</strong>
+                                    <small class="text-muted ms-1">{{ item.substituto.posto.sigla }}</small>
+                                {% else %}
+                                    <span class="text-muted small fst-italic">—</span>
+                                {% endif %}
+                            </td>
+                            {% endif %}
+
+                            {# ---- Ações ---- #}
+                            {% if pode_editar %}
+                            <td class="text-center">
                                 <form method="post" action="{% url 'escala_item_forcar' item.id %}" class="m-0">
                                     {% csrf_token %}
                                     <button type="submit" class="btn btn-xs p-0 border-0 bg-transparent"
@@ -182,10 +236,21 @@
                                         <i class="bi bi-{% if item.forcar_escala %}lightning-charge-fill{% else %}lightning-charge{% endif %}"></i>
                                     </button>
                                 </form>
-                                {% else %}
-                                    {% if item.forcar_escala %}<i class="bi bi-lightning-charge-fill text-warning"></i>{% endif %}
-                                {% endif %}
                             </td>
+                            {% elif escala.status == 'publicada' %}
+                            <td class="text-center">
+                                <button type="button"
+                                        class="btn btn-outline-secondary btn-sm py-0 px-1 btn-abrir-modal-sub"
+                                        title="Definir substituto"
+                                        data-item-id="{{ item.id }}"
+                                        data-militar-nome="{{ item.militar.nome_guerra }}"
+                                        data-militar-posto="{{ item.militar.posto.sigla }}"
+                                        data-sub-id="{{ item.substituto_id|default:'' }}"
+                                        data-data="{{ item.calendario_dia.data|date:'d/m/Y' }}">
+                                    <i class="bi bi-pencil-square"></i>
+                                </button>
+                            </td>
+                            {% endif %}
                         </tr>
                         {% endwith %}
                     {% endfor %}
@@ -227,12 +292,195 @@
                     </span>
                     {% endwith %}
                 {% empty %}{% endfor %}
-                {# deduplica via template — apenas visual, repetição é ok #}
             </div>
         </div>
         {% endif %}
     </div>
 </div>
 {% endif %}
+
+{# ===== Modal: Definir Substituto (Escala Oficial) ===== #}
+{% if escala.status == 'publicada' %}
+<div class="modal fade" id="modalSubstituto" tabindex="-1" aria-labelledby="modalSubstitutoLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header" style="background:#003a78;color:#fff;">
+                <h5 class="modal-title" id="modalSubstitutoLabel">
+                    <i class="bi bi-arrow-left-right"></i> Definir Substituto
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p class="mb-1 small text-muted">Data: <strong id="modalSubData"></strong></p>
+                <p class="mb-3">
+                    Titular: <strong id="modalSubTitular"></strong>
+                    <span class="text-muted" id="modalSubTitularPosto"></span>
+                </p>
+                <label class="form-label fw-semibold">Selecionar Substituto</label>
+                <select class="form-select" id="modalSubSelect">
+                    <option value="">— Remover substituto —</option>
+                    {% for m in militares_om %}
+                    <option value="{{ m.id }}">{{ m.nome_guerra }} ({{ m.posto.sigla }})</option>
+                    {% endfor %}
+                </select>
+                <div id="modalSubErro" class="text-danger small mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" id="btnConfirmarSub">
+                    <i class="bi bi-check-lg"></i> Confirmar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<script>
+const CSRF_TOKEN = '{{ csrf_token }}';
+
+{% if pode_editar %}
+// ======================================================
+// Rascunho / Previsão — Select com auto-save
+// ======================================================
+document.querySelectorAll('.select-trocar-militar').forEach(function(sel) {
+    sel.addEventListener('change', function() {
+        const itemId = this.dataset.itemId;
+        const militarId = this.value;
+        const url = '/escalas/item/' + itemId + '/trocar-militar/';
+        const selectEl = this;
+        selectEl.disabled = true;
+
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': CSRF_TOKEN,
+            },
+            body: JSON.stringify({militar_id: parseInt(militarId)}),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.ok) {
+                const postoEl = document.querySelector('.posto-label-' + itemId);
+                if (postoEl && data.posto_sigla) {
+                    postoEl.textContent = data.posto_sigla;
+                }
+            } else {
+                alert('Erro ao trocar militar: ' + (data.erro || 'Tente novamente.'));
+            }
+        })
+        .catch(function() {
+            alert('Erro de comunicação. Tente novamente.');
+        })
+        .finally(function() {
+            selectEl.disabled = false;
+        });
+    });
+});
+{% endif %}
+
+{% if escala.status == 'publicada' %}
+// ======================================================
+// Escala Oficial — Modal de Substituto
+// ======================================================
+var modalSubEl = document.getElementById('modalSubstituto');
+var modalSub = new bootstrap.Modal(modalSubEl);
+var itemIdAtual = null;
+
+document.querySelectorAll('.btn-abrir-modal-sub').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+        itemIdAtual = this.dataset.itemId;
+        document.getElementById('modalSubData').textContent = this.dataset.data;
+        document.getElementById('modalSubTitular').textContent = this.dataset.militarNome;
+        document.getElementById('modalSubTitularPosto').textContent = '(' + this.dataset.militarPosto + ')';
+        document.getElementById('modalSubErro').style.display = 'none';
+
+        const subId = this.dataset.subId;
+        const sel = document.getElementById('modalSubSelect');
+        sel.value = subId || '';
+
+        // Desabilita a opção do próprio titular
+        const titularId = this.dataset.itemId; // workaround: passamos via outro attr
+        for (let opt of sel.options) {
+            opt.disabled = false;
+        }
+
+        modalSub.show();
+    });
+});
+
+document.getElementById('btnConfirmarSub').addEventListener('click', function() {
+    if (!itemIdAtual) return;
+    const url = '/escalas/item/' + itemIdAtual + '/substituto/';
+    const militarId = document.getElementById('modalSubSelect').value;
+    const erroEl = document.getElementById('modalSubErro');
+    erroEl.style.display = 'none';
+
+    this.disabled = true;
+    const btnRef = this;
+
+    fetch(url, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': CSRF_TOKEN,
+        },
+        body: JSON.stringify({militar_id: militarId}),
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.ok) {
+            // Atualiza a célula de substituto na tabela
+            const cell = document.querySelector('.substituto-cell-' + itemIdAtual);
+            if (cell) {
+                if (data.removido || militarId === '') {
+                    cell.innerHTML = '<span class="text-muted small fst-italic">—</span>';
+                    // Restaura o nome do titular (desfaz riscado)
+                    const row = cell.closest('tr');
+                    const tdMilitar = row.querySelector('td:nth-child(4)');
+                    const tdPosto = row.querySelector('td:nth-child(5)');
+                    if (tdMilitar) {
+                        const originalNome = document.querySelector('[data-item-id="' + itemIdAtual + '"]').dataset.militarNome;
+                        const originalPosto = document.querySelector('[data-item-id="' + itemIdAtual + '"]').dataset.militarPosto;
+                        tdMilitar.innerHTML = '<strong>' + originalNome + '</strong>';
+                        tdPosto.innerHTML = originalPosto;
+                    }
+                } else {
+                    cell.innerHTML = '<strong class="text-success">' + data.nome_guerra + '</strong> <small class="text-muted">' + data.posto_sigla + '</small>';
+                    // Risca o nome do titular
+                    const row = cell.closest('tr');
+                    const tdMilitar = row.querySelector('td:nth-child(4)');
+                    const tdPosto = row.querySelector('td:nth-child(5)');
+                    if (tdMilitar) {
+                        const btn = document.querySelector('.btn-abrir-modal-sub[data-item-id="' + itemIdAtual + '"]');
+                        const titularNome = btn ? btn.dataset.militarNome : '';
+                        const titularPosto = btn ? btn.dataset.militarPosto : '';
+                        tdMilitar.innerHTML = '<span class="text-decoration-line-through text-muted">' + titularNome + '</span>';
+                        tdPosto.innerHTML = '<span class="text-decoration-line-through text-muted">' + titularPosto + '</span>';
+                    }
+                    // Atualiza o data-sub-id do botão
+                    const btn = document.querySelector('.btn-abrir-modal-sub[data-item-id="' + itemIdAtual + '"]');
+                    if (btn) btn.dataset.subId = militarId;
+                }
+            }
+            modalSub.hide();
+        } else {
+            erroEl.textContent = data.erro || 'Erro ao salvar.';
+            erroEl.style.display = 'block';
+        }
+    })
+    .catch(function() {
+        erroEl.textContent = 'Erro de comunicação. Tente novamente.';
+        erroEl.style.display = 'block';
+    })
+    .finally(function() {
+        btnRef.disabled = false;
+    });
+});
+{% endif %}
+</script>
 
 {% endblock %}

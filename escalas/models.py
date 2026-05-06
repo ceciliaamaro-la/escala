@@ -912,6 +912,15 @@ class EscalaItem(models.Model):
         )
     )
 
+    substituto = models.ForeignKey(
+        Militar,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='escalas_como_substituto',
+        help_text="Militar que substituiu o escalado original na Escala Oficial.",
+    )
+
     data_criacao = models.DateTimeField(auto_now_add=True)
     
     class Meta:
