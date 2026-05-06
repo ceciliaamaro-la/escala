@@ -84,6 +84,7 @@
                 <th class="d-none d-lg-table-cell">Nome completo</th>
                 <th style="width:110px;" class="d-none d-md-table-cell">Matrícula</th>
                 <th style="width:80px;" class="d-none d-md-table-cell">Divisão</th>
+                <th style="width:105px;" class="d-none d-xl-table-cell" title="Data da última promoção ao posto — mais antiga = mais antigo">Ult. Promoção</th>
                 {% for ts in tipos_servico %}
                     <th class="text-center" style="width:70px;" title="{{ ts.nome }}">
                         <span class="badge rounded-pill"
@@ -107,6 +108,11 @@
                 <td class="text-muted d-none d-lg-table-cell">{{ m.nome_completo }}</td>
                 <td class="d-none d-md-table-cell"><code>{{ m.matricula }}</code></td>
                 <td class="d-none d-md-table-cell">{{ m.divisao.sigla|default:"—" }}</td>
+                <td class="d-none d-xl-table-cell text-muted small">
+                    {% if m.data_ultima_promocao %}
+                        {{ m.data_ultima_promocao|date:"d/m/Y" }}
+                    {% else %}—{% endif %}
+                </td>
                 {% for c in linha.celulas %}
                     <td class="text-center">
                         <span class="fw-bold">{{ c.valor }}</span>

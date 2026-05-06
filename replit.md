@@ -94,17 +94,16 @@ Para repopular do zero: `python manage.py seed_dados --reset`
 - `ajuste_inicial` — saldo legado (antes do sistema entrar no ar). Necessário porque a operação começou em meio de ano com contagem prévia.
 - `total` (property) = `ajuste_inicial + quantidade`. É o valor exibido em todas as telas.
 
-## Motor de Geração por Matriz (`escalas/engine_escala.py`)
+## Modelo: Militar — Antiguidade
 
-O algoritmo representa militares × dias como uma matriz:
-- **Linhas (militares)**: ordenados de baixo para cima — mais moderno (menor `posto.ordem_hierarquica`) no índice 0.
-- **Colunas (dias)**: da esquerda para a direita (dia 1 → último dia).
+Ordenação de antiguidade: `posto__ordem_hierarquica ASC` → `data_ultima_promocao ASC` → `nome_guerra ASC`.
+- `data_ultima_promocao` é opcional (null=True). Quando preenchida, a data **mais antiga** indica o militar **mais antigo** dentro do mesmo posto.
+- NULLs aparecem antes de qualquer data na ordenação ASC do SQLite — recomenda-se preencher o campo para todos os militares.
+- Critério aplicado em: listagem de militares, engine de geração, quadrinho, indisponibilidades, matriz.
 
-Para cada dia, o algoritmo:
-1. Filtra militares disponíveis (sem `Indisponibilidade` com `exclui_do_sorteio=True` na data).
-2. Ordena candidatos por: menor nº de serviços no mês → maior tempo desde o último serviço → posição na matriz (mais moderno primeiro).
-3. Evita dias consecutivos (restrição suave — ignora se não houver alternativa).
-4. Registra o `EscalaItem` e incrementa o `Quadrinho`.
+## Motor de Geração (`escalas/engine_escala.py`) — `gerar_escala_multi_tipo`
+
+Processa **todos os dias do mês em ordem cronológica** (Preto, Vermelho, Roxo intercalados por data). Folga **global dentro do mesmo tipo de escala**: qualquer serviço (Preto ou Vermelho) bloqueia o militar para todos os tipos pelo período de folga. Permanência e Sobreaviso têm filas independentes. `EscalaItem.forcar_escala=True` ignora a folga para aquele item específico (botão ⚡ na tela de detalhe).
 
 ## Rotas de Escala
 

@@ -532,7 +532,7 @@ def militar_listar(request):
     if posto_filtro:
         militares_qs = militares_qs.filter(posto_id=posto_filtro)
 
-    militares_qs = militares_qs.order_by('-posto__ordem_hierarquica', 'nome_guerra')
+    militares_qs = militares_qs.order_by('-posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
     militares = list(militares_qs)
 
     divisoes = (
@@ -869,11 +869,12 @@ def indisponibilidade_listar(request):
         militares = (
             Militar.objects.filter(organizacao_militar=om, ativo=True)
             .select_related('posto')
-            .order_by('posto__ordem_hierarquica', 'nome_guerra')
+            .order_by('posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
         ) if om else []
         filtro_mil = request.GET.get('militar', '')
         if filtro_mil:
             indisp = indisp.filter(militar_id=filtro_mil)
+
 
     return render(request, 'indisponibilidade/listar.html', {
         'indisp': indisp,
@@ -1233,7 +1234,7 @@ def escala_gerar(request, escala_id):
         lista_militares = list(
             Militar.objects.filter(organizacao_militar=om, ativo=True)
             .select_related('posto')
-            .order_by('posto__ordem_hierarquica', 'nome_guerra')
+            .order_by('posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
         )
 
         if not lista_militares:
@@ -1462,7 +1463,7 @@ def escala_matriz(request, escala_id):
     militares = list(
         Militar.objects.filter(organizacao_militar=om, ativo=True)
         .select_related('posto')
-        .order_by('posto__ordem_hierarquica', 'nome_guerra')
+        .order_by('posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
     )
 
     # Dias do calendário do mês

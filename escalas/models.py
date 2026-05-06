@@ -401,7 +401,17 @@ class Militar(models.Model):
     data_nascimento = models.DateField(
         help_text="Data de nascimento"
     )
-    
+
+    data_ultima_promocao = models.DateField(
+        null=True,
+        blank=True,
+        help_text=(
+            "Data da última promoção ao posto atual. "
+            "Usada como critério de antiguidade quando dois militares têm o mesmo posto: "
+            "a data mais antiga indica o militar mais antigo."
+        )
+    )
+
     # Vínculo com usuário do sistema (login próprio do militar)
     user = models.OneToOneField(
         'escalas.UsuarioCustomizado',

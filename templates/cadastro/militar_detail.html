@@ -54,6 +54,19 @@
                         <p>{{ militar.data_nascimento|date:"d/m/Y" }} <span class="text-muted small">({{ militar.obter_idade }} anos)</span></p>
                     </div>
                     <div class="col-md-6">
+                        <div class="form-label">Última promoção</div>
+                        <p>
+                            {% if militar.data_ultima_promocao %}
+                                {{ militar.data_ultima_promocao|date:"d/m/Y" }}
+                                <span class="text-muted small ms-1" title="Data de promoção ao posto atual — quanto mais antiga, mais antigo no posto">
+                                    <i class="bi bi-info-circle"></i>
+                                </span>
+                            {% else %}
+                                <span class="text-muted">—</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
                         <div class="form-label">Cadastrado em</div>
                         <p>{{ militar.data_criacao|date:"d/m/Y H:i" }}</p>
                     </div>

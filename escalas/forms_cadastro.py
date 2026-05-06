@@ -142,12 +142,17 @@ class MilitarForm(BootstrapFormMixin, forms.ModelForm):
             'posto', 'especialidade', 'divisao',
             'nome_guerra', 'nome_completo',
             'cpf', 'matricula', 'data_nascimento',
+            'data_ultima_promocao',
             'ativo',
         ]
         widgets = {
             'data_nascimento': forms.DateInput(attrs={'type': 'date'}),
+            'data_ultima_promocao': forms.DateInput(attrs={'type': 'date'}),
             'cpf': forms.TextInput(attrs={'placeholder': 'somente números (11 dígitos)'}),
             'nome_guerra': forms.TextInput(attrs={'placeholder': 'Ex: SILVA'}),
+        }
+        labels = {
+            'data_ultima_promocao': 'Última promoção',
         }
 
     def __init__(self, *args, om=None, **kwargs):
@@ -316,7 +321,7 @@ class IndisponibilidadeRegistrarForm(BootstrapFormMixin, forms.ModelForm):
             self.fields['militar'].queryset = (
                 Militar.objects.filter(organizacao_militar=om, ativo=True)
                 .select_related('posto')
-                .order_by('posto__ordem_hierarquica', 'nome_guerra')
+                .order_by('posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
             )
         if militar_fixo:
             self.fields['militar'].initial = militar_fixo
