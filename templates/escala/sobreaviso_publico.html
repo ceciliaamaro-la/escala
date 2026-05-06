@@ -52,60 +52,15 @@
             margin-bottom: 1rem;
         }
 
-        /* Cards dos dias */
-        .dias-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-            gap: 0.6rem;
-        }
-        .dia-card {
+        /* Tabela dos dias */
+        .escala-table-wrapper {
             background: #fff;
-            border-radius: 8px;
-            padding: 0.7rem 0.8rem;
-            border-left: 4px solid #ccc;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.07);
-            position: relative;
+            border-radius: 10px;
+            box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+            overflow: hidden;
         }
-        .dia-card.hoje-card {
-            border-left-color: var(--m-amarelo-fab, #ffd200) !important;
-            background: #fffbea;
-            box-shadow: 0 2px 8px rgba(255,210,0,0.25);
-        }
-        .dia-card .dia-data {
-            font-size: 0.72rem;
-            font-weight: 700;
-            color: #555;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .dia-card .dia-semana {
-            font-size: 0.7rem;
-            color: #888;
-            margin-bottom: 0.3rem;
-        }
-        .dia-card .dia-militar {
-            font-size: 0.95rem;
-            font-weight: 700;
-            color: #1a1a2e;
-            line-height: 1.2;
-        }
-        .dia-card .dia-posto {
-            font-size: 0.7rem;
-            color: #666;
-        }
-        .dia-card .badge-hoje {
-            position: absolute;
-            top: 0.4rem;
-            right: 0.4rem;
-            font-size: 0.6rem;
-            background: var(--m-amarelo-fab, #ffd200);
-            color: var(--m-azul-fab, #003a78);
-            font-weight: 800;
-            padding: 0.15rem 0.4rem;
-            border-radius: 4px;
-        }
-        .dia-card.vazio { background: #f8f8f8; border-left-color: #ddd; }
-        .dia-card.vazio .dia-militar { color: #aaa; font-style: italic; font-weight: 400; font-size: 0.82rem; }
+        .escala-table-wrapper .table { margin-bottom: 0; }
+        tr.hoje-row { background-color: #fffbea !important; }
 
         /* Tabela de próximos */
         .proximos-card {
@@ -209,17 +164,45 @@
     </div>
 
     {% if bloco.itens_15 %}
-    <div class="dias-grid mb-3">
-        {% for d in bloco.itens_15 %}
-        <div class="dia-card {% if d.data == hoje %}hoje-card{% endif %}"
-             style="border-left-color: {{ d.tipo_servico.cor_hex|default:'#aaa' }}">
-            {% if d.data == hoje %}<span class="badge-hoje">HOJE</span>{% endif %}
-            <div class="dia-data">{{ d.data|date:"d/m" }}</div>
-            <div class="dia-semana">{{ d.dia_semana }}</div>
-            <div class="dia-militar">{{ d.militar.nome_guerra }}</div>
-            <div class="dia-posto">{{ d.militar.posto.sigla }}</div>
+    <div class="escala-table-wrapper mb-3">
+        <div class="card-header fw-semibold" style="background:#f8f9fa;padding:0.6rem 1rem;border-bottom:1px solid #dee2e6;">
+            <i class="bi bi-table"></i> Escala do Mês
+            <span class="badge bg-primary ms-2">{{ bloco.itens_15|length }} dia(s)</span>
         </div>
-        {% endfor %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover mb-0 align-middle">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Data</th>
+                        <th>Dia</th>
+                        <th>Tipo</th>
+                        <th>Militar</th>
+                        <th>Posto</th>
+                    </tr>
+                </thead>
+                <tbody>
+                {% for d in bloco.itens_15 %}
+                    <tr {% if d.data == hoje %}class="hoje-row"{% endif %}>
+                        <td class="fw-semibold">
+                            {{ d.data|date:"d/m/Y" }}
+                            {% if d.data == hoje %}
+                            <span class="badge ms-1" style="background:var(--m-amarelo-fab,#ffd200);color:var(--m-azul-fab,#003a78);font-size:0.6rem;">HOJE</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-muted small">{{ d.dia_semana }}</td>
+                        <td>
+                            <span class="badge"
+                                  style="background-color:{{ d.tipo_servico.cor_hex|default:'#aaa' }};color:{% if d.tipo_servico.cor_hex == '#000000' %}#fff{% elif d.tipo_servico.cor_hex == '#ffffff' %}#000{% else %}#fff{% endif %}">
+                                {{ d.tipo_servico.nome }}
+                            </span>
+                        </td>
+                        <td><strong>{{ d.militar.nome_guerra }}</strong></td>
+                        <td class="small text-muted">{{ d.militar.posto.sigla }}</td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
     </div>
     {% else %}
     <div class="alert alert-light border small">
