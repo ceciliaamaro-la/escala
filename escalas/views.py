@@ -1939,25 +1939,17 @@ def sobreaviso_publico(request):
 
 def quadrinho_publico(request):
     """
-    Tela pública (sem login) que exibe a matriz do Quadrinho:
-    militares × tipos de serviço, por tipo de escala (abas) e ano (filtro).
+    Tela pública (sem login) que espelha /escalas/<id>/matriz/:
+    exibe a matriz militares × dias de serviço da escala mais recente
+    publicada ou em previsão, por tipo de escala (abas).
     """
+    import calendar as _cal
     from datetime import date as _d
 
     hoje = _d.today()
-    ano_atual = hoje.year
-
-    try:
-        ano = int(request.GET.get('ano') or ano_atual)
-    except ValueError:
-        ano = ano_atual
 
     om = OrganizacaoMilitar.objects.filter(ativo=True).order_by('id').first()
-
     tipos_escala = list(TipoEscala.objects.filter(ativo=True).order_by('nome')) if om else []
-    tipos_servico = (
-        list(om.tipos_servico.filter(ativo=True).order_by('ordem')) if om else []
-    )
 
     tipo_escala_param = request.GET.get('tipo_escala', '')
     tipo_escala_atual = None
@@ -1968,66 +1960,105 @@ def quadrinho_publico(request):
     if tipo_escala_atual is None and tipos_escala:
         tipo_escala_atual = tipos_escala[0]
 
-    militares = (
-        list(
-            Militar.objects.filter(organizacao_militar=om, ativo=True)
-            .select_related('posto', 'divisao')
-            .order_by(
-                'posto__ordem_hierarquica',
-                'data_ultima_promocao',
-                'nome_guerra',
+    # Escala mais recente publicada/previsão para o tipo selecionado
+    escala = None
+    if om and tipo_escala_atual:
+        escala = (
+            Escala.objects.filter(
+                organizacao_militar=om,
+                tipo_escala=tipo_escala_atual,
+                status__in=('publicada', 'previsao'),
             )
+            .order_by('-ano', '-mes')
+            .first()
         )
-        if om else []
-    )
 
-    quadrinhos_map = {}
-    if om and tipo_escala_atual and militares and tipos_servico:
-        for qd in Quadrinho.objects.filter(
-            militar__in=militares,
-            tipo_escala=tipo_escala_atual,
-            tipo_servico__in=tipos_servico,
-            ano=ano,
+    militares = []
+    dias = []
+    itens = []
+    matrix_rows = []
+    max_eventos = 0
+
+    if escala:
+        militares = list(
+            Militar.objects.filter(organizacao_militar=om, ativo=True)
+            .select_related('posto')
+            .order_by('posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
+        )
+
+        dias = list(
+            CalendarioDia.objects.filter(
+                organizacao_militar=om,
+                data__year=escala.ano,
+                data__month=escala.mes,
+            ).select_related('tipo_servico').order_by('data')
+        )
+
+        itens = list(
+            escala.itens.select_related('militar__posto', 'calendario_dia__tipo_servico')
+            .order_by('calendario_dia__data')
+        )
+        itens_map = {item.calendario_dia.data: item.militar for item in itens}
+
+        # Indisponibilidades do período
+        ultimo_dia_num = _cal.monthrange(escala.ano, escala.mes)[1]
+        inicio = _d(escala.ano, escala.mes, 1)
+        fim = _d(escala.ano, escala.mes, ultimo_dia_num)
+
+        indisp_map = {}
+        for ind in (
+            Indisponibilidade.objects.filter(
+                militar__organizacao_militar=om,
+                data_inicio__lte=fim,
+                data_fim__gte=inicio,
+            ).select_related('militar', 'tipo')
         ):
-            quadrinhos_map[(qd.militar_id, qd.tipo_servico_id)] = qd
+            d = ind.data_inicio
+            while d <= ind.data_fim:
+                if inicio <= d <= fim:
+                    indisp_map[(ind.militar_id, d)] = ind.tipo.nome
+                d += timedelta(days=1)
 
-    linhas = []
-    totais_coluna = {ts.id: 0 for ts in tipos_servico}
-    total_geral = 0
-    for m in militares:
-        celulas = []
-        total_militar = 0
-        for ts in tipos_servico:
-            qd = quadrinhos_map.get((m.id, ts.id))
-            valor = qd.total if qd else 0
-            celulas.append({
-                'tipo_servico': ts,
-                'valor': valor,
+        for mil in militares:
+            cells = []
+            total_servicos = 0
+            for dia in dias:
+                d = dia.data
+                serves = itens_map.get(d) == mil
+                unavailable = (mil.id, d) in indisp_map
+                motivo_indisp = indisp_map.get((mil.id, d), '')
+                if serves:
+                    total_servicos += 1
+                cells.append({
+                    'dia': dia,
+                    'serves': serves,
+                    'unavailable': unavailable,
+                    'motivo': motivo_indisp,
+                })
+            eventos = [c for c in cells if c['serves'] or c['unavailable']]
+            matrix_rows.append({
+                'militar': mil,
+                'cells': cells,
+                'eventos': eventos,
+                'total': total_servicos,
             })
-            totais_coluna[ts.id] += valor
-            total_militar += valor
-        linhas.append({
-            'militar': m,
-            'celulas': celulas,
-            'total': total_militar,
-        })
-        total_geral += total_militar
 
-    totais_coluna_lista = [
-        {'tipo_servico': ts, 'valor': totais_coluna[ts.id]} for ts in tipos_servico
-    ]
-
-    anos_opcoes = list(range(ano_atual + 1, ano_atual - 5, -1))
+        max_eventos = max((len(r['eventos']) for r in matrix_rows), default=0)
+        for r in matrix_rows:
+            faltam = max_eventos - len(r['eventos'])
+            r['eventos_padded'] = r['eventos'] + [None] * faltam
 
     return render(request, 'escala/quadrinho_publico.html', {
         'om': om,
         'hoje': hoje,
-        'ano': ano,
-        'anos_opcoes': anos_opcoes,
         'tipos_escala': tipos_escala,
         'tipo_escala_atual': tipo_escala_atual,
-        'tipos_servico': tipos_servico,
-        'linhas': linhas,
-        'totais_coluna': totais_coluna_lista,
-        'total_geral': total_geral,
+        'escala': escala,
+        'militares': militares,
+        'dias': dias,
+        'itens': itens,
+        'matrix_rows': matrix_rows,
+        'max_eventos': max_eventos,
+        'max_eventos_range': range(max_eventos),
+        'nomes_meses': NOMES_MESES,
     })
