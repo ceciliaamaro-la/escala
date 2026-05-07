@@ -1935,3 +1935,99 @@ def sobreaviso_publico(request):
         'proximos_vermelho': proximos_vermelho,
         'tipos_servico': tipos_servico,
     })
+
+
+def quadrinho_publico(request):
+    """
+    Tela pública (sem login) que exibe a matriz do Quadrinho:
+    militares × tipos de serviço, por tipo de escala (abas) e ano (filtro).
+    """
+    from datetime import date as _d
+
+    hoje = _d.today()
+    ano_atual = hoje.year
+
+    try:
+        ano = int(request.GET.get('ano') or ano_atual)
+    except ValueError:
+        ano = ano_atual
+
+    om = OrganizacaoMilitar.objects.filter(ativo=True).order_by('id').first()
+
+    tipos_escala = list(TipoEscala.objects.filter(ativo=True).order_by('nome')) if om else []
+    tipos_servico = (
+        list(om.tipos_servico.filter(ativo=True).order_by('ordem')) if om else []
+    )
+
+    tipo_escala_param = request.GET.get('tipo_escala', '')
+    tipo_escala_atual = None
+    if tipo_escala_param:
+        tipo_escala_atual = next(
+            (t for t in tipos_escala if str(t.id) == tipo_escala_param), None
+        )
+    if tipo_escala_atual is None and tipos_escala:
+        tipo_escala_atual = tipos_escala[0]
+
+    militares = (
+        list(
+            Militar.objects.filter(organizacao_militar=om, ativo=True)
+            .select_related('posto', 'divisao')
+            .order_by(
+                'posto__ordem_hierarquica',
+                'data_ultima_promocao',
+                'nome_guerra',
+            )
+        )
+        if om else []
+    )
+
+    quadrinhos_map = {}
+    if om and tipo_escala_atual and militares and tipos_servico:
+        for qd in Quadrinho.objects.filter(
+            militar__in=militares,
+            tipo_escala=tipo_escala_atual,
+            tipo_servico__in=tipos_servico,
+            ano=ano,
+        ):
+            quadrinhos_map[(qd.militar_id, qd.tipo_servico_id)] = qd
+
+    linhas = []
+    totais_coluna = {ts.id: 0 for ts in tipos_servico}
+    total_geral = 0
+    for m in militares:
+        celulas = []
+        total_militar = 0
+        for ts in tipos_servico:
+            qd = quadrinhos_map.get((m.id, ts.id))
+            valor = qd.total if qd else 0
+            celulas.append({
+                'tipo_servico': ts,
+                'valor': valor,
+            })
+            totais_coluna[ts.id] += valor
+            total_militar += valor
+        linhas.append({
+            'militar': m,
+            'celulas': celulas,
+            'total': total_militar,
+        })
+        total_geral += total_militar
+
+    totais_coluna_lista = [
+        {'tipo_servico': ts, 'valor': totais_coluna[ts.id]} for ts in tipos_servico
+    ]
+
+    anos_opcoes = list(range(ano_atual + 1, ano_atual - 5, -1))
+
+    return render(request, 'escala/quadrinho_publico.html', {
+        'om': om,
+        'hoje': hoje,
+        'ano': ano,
+        'anos_opcoes': anos_opcoes,
+        'tipos_escala': tipos_escala,
+        'tipo_escala_atual': tipo_escala_atual,
+        'tipos_servico': tipos_servico,
+        'linhas': linhas,
+        'totais_coluna': totais_coluna_lista,
+        'total_geral': total_geral,
+    })

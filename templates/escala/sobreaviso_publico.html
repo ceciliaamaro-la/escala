@@ -126,24 +126,7 @@
 </head>
 <body>
 
-<header class="sobreaviso-header">
-    {% if om and om.logo %}
-        <img src="{{ om.logo.url }}" alt="Logo {{ om.sigla }}" class="om-logo">
-    {% else %}
-        <span class="crest" style="width:48px;height:48px;font-size:1.4rem;flex-shrink:0;">★</span>
-    {% endif %}
-    <div>
-        <h1><i class="bi bi-broadcast"></i> Escala de Sobreaviso</h1>
-        <div class="subtitle">
-            {% if om %}{{ om.nome }}{% else %}Sistema de Escala FAB{% endif %}
-            &nbsp;·&nbsp; Atualizado a cada 5 min
-        </div>
-    </div>
-    <div class="data-hora">
-        <div class="fw-bold" id="hora-atual"></div>
-        <div>{{ hoje|date:"d/m/Y" }}</div>
-    </div>
-</header>
+
 
 <main class="container-fluid py-4 px-3 px-md-4">
 

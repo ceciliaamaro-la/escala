@@ -129,4 +129,7 @@ urlpatterns = [
 
     # Tela pública — Escala de Sobreaviso (sem login)
     path('sobreaviso/', views.sobreaviso_publico, name='sobreaviso_publico'),
+
+    # Tela pública — Quadrinho de Serviços (sem login)
+    path('quadrinho-publico/', views.quadrinho_publico, name='quadrinho_publico'),
 ]
