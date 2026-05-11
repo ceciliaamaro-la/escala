@@ -246,6 +246,7 @@ class Divisao(models.Model):
     )
     
     descricao = models.TextField(
+        verbose_name="Descrição",
         blank=True,
         help_text="Descrição das responsabilidades"
     )
@@ -286,6 +287,7 @@ class Posto(models.Model):
     )
     
     ordem_hierarquica = models.PositiveIntegerField(
+        verbose_name="Ordem hierárquica",
         unique=True,
         help_text="Ordem na hierarquia (1=menor, 20=maior)"
     )
@@ -319,6 +321,7 @@ class Especialidade(models.Model):
     )
     
     descricao = models.TextField(
+        verbose_name="Descrição",
         blank=True,
         help_text="Descrição de responsabilidades e requisitos"
     )
@@ -511,6 +514,7 @@ class TipoServico(models.Model):
     )
     
     descricao = models.TextField(
+        verbose_name="Descrição",
         blank=True,
         help_text="Ex: 'Segunda a sexta - dias úteis'"
     )
@@ -552,11 +556,13 @@ class TipoEscala(models.Model):
     )
     
     descricao = models.TextField(
+        verbose_name="Descrição",
         blank=True,
         help_text="Explicação do tipo de escala"
     )
 
     folga_minima_horas = models.PositiveIntegerField(
+        verbose_name="Folga mínima (horas)",
         null=True,
         blank=True,
         help_text=(
@@ -702,6 +708,7 @@ class TipoIndisponibilidade(models.Model):
     )
     
     descricao = models.TextField(
+        verbose_name="Descrição",
         blank=True
     )
     
@@ -1118,6 +1125,7 @@ class ConfiguracaoEscala(models.Model):
     )
 
     folga_minima_horas = models.PositiveIntegerField(
+        verbose_name="Folga mínima (horas)",
         default=48,
         help_text=(
             "Horas mínimas de folga exigidas após um serviço ou retorno de "
@@ -1127,6 +1135,7 @@ class ConfiguracaoEscala(models.Model):
     )
 
     duracao_servico_horas = models.PositiveIntegerField(
+        verbose_name="Duração do serviço (horas)",
         default=24,
         help_text=(
             "Duração padrão de um serviço em horas. "
@@ -1135,6 +1144,7 @@ class ConfiguracaoEscala(models.Model):
     )
 
     bloquear_pre_ferias = models.BooleanField(
+        verbose_name="Bloquear pré-férias",
         default=True,
         help_text=(
             "Se ativado, bloqueia serviços que terminariam dentro do período "
@@ -1143,6 +1153,7 @@ class ConfiguracaoEscala(models.Model):
     )
 
     bloquear_pos_ferias = models.BooleanField(
+        verbose_name="Bloquear pós-férias",
         default=True,
         help_text=(
             "Se ativado, bloqueia serviços dentro do período de folga mínima "
