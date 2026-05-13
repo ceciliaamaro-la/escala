@@ -1,0 +1,7 @@
+Para gerar a escala o primeiro passo e verificar a coluna com mais vazia, no exemplo acima e a coluna B
+O próximo passo eu começo a subir de baixo pra cima, 5B( não está vazia), então próximo 4B, está vazio então eu uso, depois 3B, tambem está preenchida, 2B támbem, 1B esta vazia então eu uso
+Cheguei no topo, começo na 5C não esta vazia, depois 4C que esta vazia e uso
+
+assim vou sequindo a sequencia
+consegue ver o padrão de como e gerado a escala
+verifica se o sistema atual esta trabalhando assim

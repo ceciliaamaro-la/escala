@@ -118,6 +118,7 @@ urlpatterns = [
     path('escalas/configuracao/', views.configuracao_escala, name='configuracao_escala'),
     path('escalas/<int:escala_id>/', views.escala_detalhar, name='escala_detalhar'),
     path('escalas/<int:escala_id>/gerar/', views.escala_gerar, name='escala_gerar'),
+    path('escalas/<int:escala_id>/gerar-vertical/', views.escala_gerar_vertical, name='escala_gerar_vertical'),
     path('escalas/<int:escala_id>/limpar/', views.escala_limpar, name='escala_limpar'),
     path('escalas/item/<int:item_id>/forcar/', views.escala_item_forcar, name='escala_item_forcar'),
     path('escalas/item/<int:item_id>/trocar-militar/', views.escala_item_trocar_militar, name='escala_item_trocar_militar'),

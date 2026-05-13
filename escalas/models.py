@@ -902,12 +902,178 @@ class Escala(models.Model):
         """Retorna (data_inicio, data_fim) do mês/ano"""
         from datetime import date
         import calendar
-        
+
         primeiro_dia = date(self.ano, self.mes, 1)
         ultimo_dia_mes = calendar.monthrange(self.ano, self.mes)[1]
         ultimo_dia = date(self.ano, self.mes, ultimo_dia_mes)
-        
+
         return (primeiro_dia, ultimo_dia)
+
+    @staticmethod
+    def gerar_escala_vertical(escala: 'Escala') -> int:
+        """
+        Gera escala com algoritmo VERTICAL (por coluna/dia).
+
+        Este algoritmo distribui os militares de forma que cada dia (coluna)
+        tenha aproximadamente o mesmo número de escalados.
+
+        Algoritmo:
+            1. Encontra a coluna (dia) com menos alocações já existentes
+            2. Preenche de baixo para cima (militar mais antigo → mais moderno)
+            3. Verifica indisponibilidades antes de alocar
+            4. Repete para próxima coluna mais vazia
+
+        Args:
+            escala: Instância de Escala em rascunho ou previsão
+
+        Returns:
+            int: Total de alocações criadas
+
+        Raises:
+            ValidationError: Se escala não estiver em rascunho/previsão,
+                           ou se não houver militares/dias cadastrados
+        """
+        from datetime import date as date_type, timedelta
+        from calendar import monthrange
+        from typing import Dict, Set, List
+
+        # Validações iniciais
+        if escala.status not in ('rascunho', 'previsao'):
+            raise ValidationError(
+                "Apenas escalas em Rascunho ou Previsão podem ser geradas."
+            )
+
+        om = escala.organizacao_militar
+        primeiro_dia = date_type(escala.ano, escala.mes, 1)
+        ultimo_num = monthrange(escala.ano, escala.mes)[1]
+        ultimo_dia = date_type(escala.ano, escala.mes, ultimo_num)
+
+        # Obter dias do mês com select_related para performance
+        dias_qs = CalendarioDia.objects.filter(
+            organizacao_militar=om,
+            data__range=(primeiro_dia, ultimo_dia),
+        ).select_related('tipo_servico').order_by('data')
+
+        if not dias_qs.exists():
+            raise ValidationError(
+                f"Não há dias cadastrados no calendário para {escala.mes}/{escala.ano}. "
+                "Cadastre os dias ou gere o calendário automático."
+            )
+
+        lista_dias = list(dias_qs)
+
+        # Obter militares ativos da OM (ordenados: mais moderno primeiro, mais antigo por último)
+        # O algoritmo preenche de BAIXO para CIMA, então o último da lista é o "fundo"
+        lista_militares = list(
+            Militar.objects.filter(organizacao_militar=om, ativo=True)
+            .select_related('posto', 'organizacao_militar')
+            .order_by('-posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
+        )
+
+        if not lista_militares:
+            raise ValidationError("Nenhum militar ativo nesta OM.")
+
+        # Obter indisponibilidades do período
+        # Retorna dict: {militar_id: set(datas indisponíveis)}
+        indisponibilidades: Dict[int, Set[date_type]] = {}
+        registros = Indisponibilidade.objects.filter(
+            militar__organizacao_militar=om,
+            tipo__exclui_do_sorteio=True,
+            data_inicio__lte=ultimo_dia,
+            data_fim__gte=primeiro_dia,
+        ).values_list('militar_id', 'data_inicio', 'data_fim')
+
+        for militar_id, ini, fim in registros:
+            indisponibilidades.setdefault(militar_id, set())
+            cursor = ini
+            while cursor <= fim:
+                if primeiro_dia <= cursor <= ultimo_dia:
+                    indisponibilidades[militar_id].add(cursor)
+                cursor += timedelta(days=1)
+
+        # Contagem atual de alocações por dia (coluna)
+        # Já que a escala pode ter itens existentes, contar antes de adicionar
+        contagem_por_dia: Dict[int, int] = {}
+        for dia in lista_dias:
+            contagem_por_dia[dia.id] = EscalaItem.objects.filter(
+                escala=escala,
+                calendario_dia=dia
+            ).count()
+
+        # Criar dicionário de militares por ID para acesso rápido
+        militar_por_id = {m.id: m for m in lista_militares}
+
+        # Militares já alocados nesta escala (evitar duplicação)
+        militares_alocados = set(
+            escala.itens.values_list('militar_id', flat=True)
+        )
+
+        # --- ALGORITMO VERTICAL ---
+        # O algoritmo distribui militares de forma que cada dia (coluna)
+        # tenha aproximadamente o mesmo número de escalados.
+        #
+        # PASSO 1: Encontrar dia mais vazio (menor contagem)
+        # PASSO 2: Preencher de BAIXO para CIMA (reversed = mais moderno → mais antigo)
+        # PASSO 3: Repetir até não conseguir mais preencher nenhum dia
+        alocacoes_criadas = 0
+
+        # Iniciar contagem zerada (a view já deleteu os itens)
+        contagem_por_dia = {dia.id: 0 for dia in lista_dias}
+
+        # Loop: continuar até não conseguir mais adicionar ninguém
+        max_iteracoes = len(lista_dias) * len(lista_militares)
+        iteracao = 0
+
+        while iteracao < max_iteracoes:
+            iteracao += 1
+            adicionou_algo = False
+
+            # PASSO 1: Encontrar dia mais vazio (menor contagem primeiro)
+            dia_mais_vazio = None
+            menor_contagem = float('inf')
+
+            for dia in lista_dias:
+                contagem = contagem_por_dia.get(dia.id, 0)
+                if contagem < menor_contagem:
+                    menor_contagem = contagem
+                    dia_mais_vazio = dia
+
+            # Se todos os dias já têm 1 militar, sair
+            if menor_contagem >= 1:
+                break
+
+            # PASSO 2: Preencher de BAIXO para CIMA
+            for militar in reversed(lista_militares):
+                # Verificar indisponibilidade
+                if militar.id in indisponibilidades:
+                    if dia_mais_vazio.data in indisponibilidades[militar.id]:
+                        continue
+
+                # Militar disponível! Criar item
+                EscalaItem.objects.create(
+                    escala=escala,
+                    militar=militar,
+                    calendario_dia=dia_mais_vazio,
+                    observacao='Gerado automaticamente (algoritmo vertical)',
+                )
+
+                contagem_por_dia[dia_mais_vazio.id] = 1
+                alocacoes_criadas += 1
+                adicionou_algo = True
+
+                Quadrinho.incrementar(
+                    militar=militar,
+                    tipo_escala=escala.tipo_escala,
+                    tipo_servico=dia_mais_vazio.tipo_servico,
+                    ano=escala.ano,
+                )
+                break  # Dia preenchido, sair do loop de militares
+
+            # Se não conseguiu adicionar ninguém neste dia, continuar para próximo loop
+            if not adicionou_algo:
+                continue
+
+        return alocacoes_criadas
 
 
 class EscalaItem(models.Model):

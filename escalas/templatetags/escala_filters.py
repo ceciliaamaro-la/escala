@@ -10,3 +10,12 @@ def index(lista, i):
         return lista[int(i)]
     except (IndexError, TypeError, ValueError):
         return ''
+
+
+@register.filter
+def get_item(dictionary, key):
+    """Retorna o valor de uma chave em um dicionário — ex: {{ dict|get_item:key }}"""
+    try:
+        return dictionary.get(key, [])
+    except (AttributeError, TypeError):
+        return []

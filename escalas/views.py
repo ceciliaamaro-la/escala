@@ -832,6 +832,31 @@ def quadrinho_visao(request):
                 .first()
             )
 
+    # ── Registros detalhados de serviços por militar ───────────────────────
+    registros_por_militar = {}
+    if om and tipo_escala_atual and militares:
+        militar_ids = [m.id for m in militares]
+        itens = EscalaItem.objects.filter(
+            militar_id__in=militar_ids,
+            calendario_dia__data__year=ano,
+            escala__tipo_escala=tipo_escala_atual,
+        ).select_related(
+            'militar__posto',
+            'calendario_dia__tipo_servico',
+            'escala',
+        ).order_by('militar__nome_guerra', 'calendario_dia__data')
+
+        for item in itens:
+            mil_id = item.militar_id
+            if mil_id not in registros_por_militar:
+                registros_por_militar[mil_id] = []
+            registros_por_militar[mil_id].append({
+                'data': item.calendario_dia.data,
+                'tipo_servico': item.calendario_dia.tipo_servico,
+                'escala_mes': f"{item.escala.mes:02d}/{item.escala.ano}",
+                'observacao': item.observacao or '',
+            })
+
     return render(
         request,
         'cadastro/quadrinho_visao.html',
@@ -848,6 +873,7 @@ def quadrinho_visao(request):
             'ordem': ordem,
             'escala_atual': escala_atual,
             'militar_proprio': militar_proprio,
+            'registros_por_militar': registros_por_militar,
         },
     )
 
@@ -1547,6 +1573,56 @@ def escala_gerar(request, escala_id):
     militares_count = Militar.objects.filter(organizacao_militar=om, ativo=True).count()
     tem_itens = escala.itens.exists()
     return render(request, 'escala/gerar.html', {
+        'escala': escala,
+        'militares_count': militares_count,
+        'tem_itens': tem_itens,
+        'nomes_meses': NOMES_MESES,
+    })
+
+
+@login_required
+def escala_gerar_vertical(request, escala_id):
+    """
+    Gera a escala automaticamente usando o MotorEscalaVertical.
+
+    Este algoritmo percorre os dias em ordem cronológica (01→30) e para cada dia
+    escolhe o militar mais adequado baseado em:
+    1. Menor quantidade de serviços no mês
+    2. Maior distância do último serviço
+    3. Ordem natural da matriz
+
+    Substitui completamente o algoritmo anterior de "dia mais vazio".
+
+    POST = executa; GET = tela de confirmação.
+    """
+    from django.core.exceptions import ValidationError
+    from .services import gerar_escala_vertical as gerar_escala_vertical_novo
+
+    escala = get_object_or_404(Escala, pk=escala_id)
+    om = escala.organizacao_militar
+
+    if escala.status not in ('rascunho', 'previsao'):
+        messages.error(request, 'Somente escalas em Rascunho ou Previsão podem ser geradas.')
+        return redirect('escala_detalhar', escala_id=escala_id)
+
+    if request.method == 'POST':
+        try:
+            alocacoes = gerar_escala_vertical_novo(escala)
+            messages.success(
+                request,
+                f'Escala gerada (motor vertical)! '
+                f'{alocacoes} alocações criadas.',
+            )
+        except ValidationError as e:
+            messages.error(request, str(e))
+            return redirect('escala_detalhar', escala_id=escala_id)
+
+        return redirect('escala_detalhar', escala_id=escala_id)
+
+    # GET — tela de confirmação
+    militares_count = Militar.objects.filter(organizacao_militar=om, ativo=True).count()
+    tem_itens = escala.itens.exists()
+    return render(request, 'escala/gerar_vertical.html', {
         'escala': escala,
         'militares_count': militares_count,
         'tem_itens': tem_itens,
