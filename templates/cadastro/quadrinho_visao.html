@@ -59,7 +59,7 @@
     </div>
 {% else %}
 
-<!-- ABAS: TOTAIS / REGISTROS DETALHADOS / MATRIZ -->
+<!-- ABAS: TOTAIS / QUADRINHOS -->
 <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="pills-totais-tab" data-bs-toggle="pill" data-bs-target="#pills-totais" type="button" role="tab">
@@ -67,13 +67,8 @@
         </button>
     </li>
     <li class="nav-item" role="presentation">
-        <button class="nav-link" id="pills-registros-tab" data-bs-toggle="pill" data-bs-target="#pills-registros" type="button" role="tab">
-            <i class="bi bi-list-check"></i> Registros Detalhados
-        </button>
-    </li>
-    <li class="nav-item" role="presentation">
         <button class="nav-link" id="pills-matriz-tab" data-bs-toggle="pill" data-bs-target="#pills-matriz" type="button" role="tab">
-            <i class="bi bi-grid-3x3-gap"></i> Matriz
+            <i class="bi bi-grid-3x3-gap"></i> Quadrinhos
         </button>
     </li>
 </ul>
@@ -187,58 +182,7 @@
         </div>
     </div>
 
-    <!-- ABA: REGISTROS DETALHADOS -->
-    <div class="tab-pane fade" id="pills-registros" role="tabpanel">
-        <div class="card-mil">
-            <div class="card-mil-header">
-                <span><i class="bi bi-list-check"></i> Registros de Serviços — {{ ano }}</span>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm table-hover mb-0" id="tabela-registros">
-                    <thead class="table-secondary">
-                        <tr>
-                            <th>Militar</th>
-                            <th>Posto</th>
-                            <th>Data</th>
-                            <th>Tipo Serviço</th>
-                            <th>Mês Escala</th>
-                            <th>Observação</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for linha in linhas %}
-                            {% with registros=registros_por_militar|get_item:linha.militar.id %}
-                                {% for reg in registros %}
-                                <tr>
-                                    <td><strong>{{ linha.militar.nome_guerra }}</strong></td>
-                                    <td>{{ linha.militar.posto.sigla }}</td>
-                                    <td>{{ reg.data|date:"d/m/Y" }}</td>
-                                    <td>
-                                        <span class="badge rounded-pill" style="background-color: {{ reg.tipo_servico.cor_hex }}; color: #fff;">
-                                            {{ reg.tipo_servico.nome }}
-                                        </span>
-                                    </td>
-                                    <td>{{ reg.escala_mes }}</td>
-                                    <td class="text-muted small">{% if reg.observacao %}{{ reg.observacao }}{% else %}-{% endif %}</td>
-                                </tr>
-                                {% empty %}
-                                    {% if forloop.first %}
-                                    {% endif %}
-                                {% endfor %}
-                            {% endwith %}
-                        {% endfor %}
-                        {% if not registros_por_militar %}
-                        <tr><td colspan="6" class="text-center text-muted py-4">
-                            Nenhum registro de serviço para {{ ano }}.
-                        </td></tr>
-                        {% endif %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-
-    <!-- ABA: MATRIZ -->
+    <!-- ABA: QUADRINHOS -->
     <div class="tab-pane fade" id="pills-matriz" role="tabpanel">
 
         <!-- Filtro de período da Matriz -->
