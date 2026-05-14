@@ -77,8 +77,7 @@
     <table class="table table-bordered table-sm mb-0 align-middle" style="font-size:0.82rem;">
       <thead class="table-dark">
         <tr>
-          <th style="min-width:130px; white-space:nowrap; position:sticky; left:0; background:#212529; z-index:2;">Militar</th>
-          <th style="min-width:60px; white-space:nowrap;">Posto</th>
+          <th style="min-width:155px; white-space:nowrap; position:sticky; left:0; background:#212529; z-index:2;">Militar</th>
           {% for i in max_eventos_range %}
           <th class="text-center" style="min-width:68px; font-weight:400; font-size:0.75rem; color:#adb5bd;">
             {{ forloop.counter }}º serv.
@@ -98,9 +97,9 @@
             {% if forloop.last %}
               <span class="badge bg-warning text-dark me-1" style="font-size:0.6rem;" title="Base — mais moderno">↓</span>
             {% endif %}
-            {{ row.militar.nome_guerra }}
+            {{ row.militar|posto_nome }}
           </td>
-          <td class="text-muted" style="white-space:nowrap;">{{ row.militar.posto.sigla }}</td>
+          <td class="text-muted" style="white-space:nowrap;"></td>
 
           {# Uma <td> por evento (serviço ou indisponibilidade), preenchidas da esquerda #}
           {% for ev in row.eventos_padded %}

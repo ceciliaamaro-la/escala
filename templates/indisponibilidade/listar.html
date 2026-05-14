@@ -1,4 +1,5 @@
 {% extends 'base.html' %}
+{% load escala_filters %}
 {% block titulo %}Indisponibilidades — {{ block.super }}{% endblock %}
 
 {% block conteudo %}
@@ -62,7 +63,7 @@
   <table class="table table-hover align-middle">
     <thead class="table-dark">
       <tr>
-        {% if not militar_proprio %}<th>Militar</th><th>Posto</th>{% endif %}
+        {% if not militar_proprio %}<th>Militar</th>{% endif %}
         <th>Tipo</th>
         <th>Período</th>
         <th>Excluí sorteio?</th>
@@ -74,8 +75,7 @@
       {% for ind in indisp %}
       <tr>
         {% if not militar_proprio %}
-          <td class="fw-semibold">{{ ind.militar.nome_guerra }}</td>
-          <td class="text-muted small">{{ ind.militar.posto.sigla }}</td>
+          <td class="fw-semibold">{{ ind.militar|posto_nome }}</td>
         {% endif %}
         <td>
           <span class="badge {% if ind.tipo.exclui_do_sorteio %}bg-danger{% else %}bg-secondary{% endif %}">

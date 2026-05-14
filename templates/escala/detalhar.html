@@ -279,10 +279,7 @@
             <ul class="list-group list-group-flush">
                 {% for militar, total in contagem_lista %}
                 <li class="list-group-item d-flex justify-content-between align-items-center py-2">
-                    <div>
-                        <strong>{{ militar.nome_guerra }}</strong>
-                        <br><small class="text-muted">{{ militar.posto.sigla }}</small>
-                    </div>
+                    <strong>{{ militar|posto_nome }}</strong>
                     <span class="badge bg-primary rounded-pill fs-6">{{ total }}</span>
                 </li>
                 {% endfor %}

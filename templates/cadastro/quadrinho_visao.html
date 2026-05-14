@@ -10,7 +10,7 @@
             {% if om %}{{ om.sigla }}{% else %}—{% endif %}
             &middot; {{ ano }}
             {% if tipo_escala_atual %} &middot; <strong>{{ tipo_escala_atual.nome }}</strong>{% endif %}
-            {% if militar_proprio %} &middot; <span class="text-warning">{{ militar_proprio.posto.sigla }} {{ militar_proprio.nome_guerra }}</span>{% endif %}
+            {% if militar_proprio %} &middot; <span class="text-warning">{{ militar_proprio|posto_nome }}</span>{% endif %}
         </div>
     </div>
     <div class="d-flex gap-2 flex-wrap">
@@ -240,58 +240,127 @@
 
     <!-- ABA: MATRIZ -->
     <div class="tab-pane fade" id="pills-matriz" role="tabpanel">
-        <div class="card-mil">
-            <div class="card-mil-header">
-                <span><i class="bi bi-grid-3x3-gap"></i> Matriz de Serviços — {{ ano }}</span>
+
+        <!-- Filtro de período da Matriz -->
+        <form method="get" class="d-flex align-items-center gap-2 flex-wrap mb-3">
+            <input type="hidden" name="tipo_escala" value="{{ tipo_escala_atual.id }}">
+            <input type="hidden" name="ano" value="{{ ano }}">
+            <input type="hidden" name="ordem" value="{{ ordem }}">
+            <i class="bi bi-funnel text-muted"></i>
+            <label class="small text-muted mb-0">Período:</label>
+            <select name="matriz_mes" class="form-select form-select-sm" style="width:auto;">
+                <option value="0" {% if not matriz_mes %}selected{% endif %}>Todos os meses</option>
+                {% for i in "123456789abc" %}{% endfor %}
+                <option value="1"  {% if matriz_mes == 1  %}selected{% endif %}>Janeiro</option>
+                <option value="2"  {% if matriz_mes == 2  %}selected{% endif %}>Fevereiro</option>
+                <option value="3"  {% if matriz_mes == 3  %}selected{% endif %}>Março</option>
+                <option value="4"  {% if matriz_mes == 4  %}selected{% endif %}>Abril</option>
+                <option value="5"  {% if matriz_mes == 5  %}selected{% endif %}>Maio</option>
+                <option value="6"  {% if matriz_mes == 6  %}selected{% endif %}>Junho</option>
+                <option value="7"  {% if matriz_mes == 7  %}selected{% endif %}>Julho</option>
+                <option value="8"  {% if matriz_mes == 8  %}selected{% endif %}>Agosto</option>
+                <option value="9"  {% if matriz_mes == 9  %}selected{% endif %}>Setembro</option>
+                <option value="10" {% if matriz_mes == 10 %}selected{% endif %}>Outubro</option>
+                <option value="11" {% if matriz_mes == 11 %}selected{% endif %}>Novembro</option>
+                <option value="12" {% if matriz_mes == 12 %}selected{% endif %}>Dezembro</option>
+            </select>
+            <select name="matriz_ano" class="form-select form-select-sm" style="width:auto;">
+                {% for a in anos_opcoes_matriz %}
+                    <option value="{{ a }}" {% if a == matriz_ano %}selected{% endif %}>{{ a }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn btn-sm btn-mil">
+                <i class="bi bi-search"></i> Filtrar
+            </button>
+        </form>
+
+        {% for secao in matriz_secoes %}
+        <div class="card-mil mb-4">
+            <div class="card-mil-header d-flex align-items-center gap-2">
+                <span class="badge rounded-pill" style="background-color:{{ secao.tipo_servico.cor_hex }};color:#fff;">
+                    {{ secao.tipo_servico.nome }}
+                </span>
+                <span>Registros de Serviço — {{ matriz_ano }}{% if matriz_mes %}/{{ matriz_mes|stringformat:"02d" }}{% endif %}</span>
+                <span class="badge bg-secondary ms-auto">{{ secao.total_geral }} serviço(s)</span>
             </div>
-            <div class="table-responsive" style="overflow-x: auto;">
-                <table class="table table-sm table-bordered mb-0" style="font-size: 0.75rem; min-width: 1200px;">
-                    <thead class="table-secondary">
-                        <tr>
-                            <th style="position: sticky; left: 0; background: #f8f9fa; z-index: 2; min-width: 120px;">Militar</th>
-                            <th style="min-width: 50px;">Posto</th>
-                            {% for dia in matriz_dias %}
-                            <th class="text-center" style="min-width: 20px; padding: 2px;" title="{{ dia|date:"d/m" }}">
-                                {{ dia|date:"j" }}
+
+            {% if not secao.datas %}
+            <div class="p-3 text-muted small">
+                <i class="bi bi-calendar-x"></i> Nenhum serviço registrado neste tipo para o período.
+            </div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered mb-0 align-middle" style="font-size:0.82rem;">
+                    <thead>
+                        <tr class="table-secondary">
+                            <th style="position:sticky;left:0;background:#f8f9fa;z-index:2;min-width:160px;white-space:nowrap;">
+                                Militar
+                            </th>
+                            {% for data in secao.datas %}
+                            <th class="text-center" style="min-width:48px;white-space:nowrap;font-weight:500;"
+                                title="{{ data|date:'l, d/m/Y' }}">
+                                {{ data|date:"d/m" }}
                             </th>
                             {% endfor %}
-                            <th style="min-width: 50px;">Total</th>
+                            <th class="text-center" style="min-width:52px;">Total</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for row in matriz_linhas %}
+                        {% for linha in secao.linhas %}
+                        {% if linha.total > 0 or True %}
                         <tr>
-                            <td style="position: sticky; left: 0; background: #fff; z-index: 1;">
-                                <strong>{{ row.militar.nome_guerra }}</strong>
+                            <td style="position:sticky;left:0;background:#fff;z-index:1;white-space:nowrap;font-weight:600;">
+                                {{ linha.militar|posto_nome }}
                             </td>
-                            <td>{{ row.militar.posto.sigla }}</td>
-                            {% for celula in row.celulas %}
-                            <td class="text-center p-0" style="padding: 0 !important;">
-                                {% if celula %}
-                                <span class="badge w-100 h-100 d-flex align-items-center justify-content-center"
-                                      style="background-color: {{ celula.cor }}; font-size: 0.65rem; padding: 2px;"
-                                      title="{{ celula.nome }}">
+                            {% for data in secao.datas %}
+                            <td class="text-center p-1">
+                                {% if data in linha.datas_set %}
+                                <span class="badge rounded-pill"
+                                      style="background-color:{{ secao.tipo_servico.cor_hex }};color:#fff;font-size:0.72rem;"
+                                      title="{{ data|date:'d/m/Y' }}">
+                                    ✓
                                 </span>
                                 {% else %}
-                                <span style="opacity: 0.2;">·</span>
+                                <span class="text-muted" style="opacity:0.25;">·</span>
                                 {% endif %}
                             </td>
                             {% endfor %}
-                            <td class="text-center fw-bold">{{ row.total }}</td>
+                            <td class="text-center fw-bold">
+                                {% if linha.total > 0 %}
+                                <span class="badge bg-dark rounded-pill">{{ linha.total }}</span>
+                                {% else %}
+                                <span class="text-muted">0</span>
+                                {% endif %}
+                            </td>
                         </tr>
-                        {% empty %}
-                        <tr><td colspan="{{ matriz_dias|length|add:3 }}" class="text-center text-muted py-4">
-                            Nenhum militar ativo nesta OM.
-                        </td></tr>
+                        {% endif %}
                         {% endfor %}
                     </tbody>
+                    <tfoot>
+                        <tr class="table-light fw-bold small">
+                            <td style="position:sticky;left:0;background:#f8f9fa;" class="text-end">Total</td>
+                            {% for data in secao.datas %}
+                            <td class="text-center">
+                                {% with cnt=0 %}
+                                {% for linha in secao.linhas %}{% if data in linha.datas_set %}·{% endif %}{% endfor %}
+                                {% endwith %}
+                            </td>
+                            {% endfor %}
+                            <td class="text-center">
+                                <span class="badge bg-dark rounded-pill">{{ secao.total_geral }}</span>
+                            </td>
+                        </tr>
+                    </tfoot>
                 </table>
             </div>
-            <div class="card-footer small text-muted">
-                <i class="bi bi-info-circle"></i> Cada célula representa um dia do ano.
-                As cores indicam o tipo de serviço (Preto, Vermelho, Roxo).
-            </div>
+            {% endif %}
         </div>
+        {% empty %}
+        <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i> Nenhum dado de matriz disponível para o período selecionado.
+        </div>
+        {% endfor %}
+
     </div>
 
 </div>

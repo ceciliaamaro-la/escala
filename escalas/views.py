@@ -857,51 +857,102 @@ def quadrinho_visao(request):
                 'observacao': item.observacao or '',
             })
 
-    # ── Matriz: militares × dias (todos os dias do ano) ────────────────────
-    matriz_dias = []
-    if om and militares:
-        # Gerar todos os dias do ano
-        from calendar import monthrange
-        for mes in range(1, 13):
-            ultimo_dia = monthrange(ano, mes)[1]
-            for dia in range(1, ultimo_dia + 1):
-                matriz_dias.append(date(ano, mes, dia))
+    # ── Matriz: militares × dias registrados, separado por tipo de serviço ──
+    # Filtro de período da matriz (separado dos filtros de totais)
+    try:
+        matriz_mes = int(request.GET.get('matriz_mes') or 0)  # 0 = todos os meses
+    except ValueError:
+        matriz_mes = 0
+    try:
+        matriz_ano = int(request.GET.get('matriz_ano') or ano)
+    except ValueError:
+        matriz_ano = ano
 
-        # Criar mapa de serviços por (militar_id, data)
-        mapa_servicos = {}
-        if tipo_escala_atual:
-            servicos = EscalaItem.objects.filter(
-                militar_id__in=[m.id for m in militares],
-                calendario_dia__data__year=ano,
-                escala__tipo_escala=tipo_escala_atual,
-            ).values('militar_id', 'calendario_dia__data', 'calendario_dia__tipo_servico__cor_hex', 'calendario_dia__tipo_servico__nome')
+    # Militares em ordem de antiguidade para a Matriz (independente do filtro de totais)
+    militares_antiguidade = (
+        list(
+            Militar.objects.filter(organizacao_militar=om, ativo=True)
+            .select_related('posto')
+            .order_by('posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra')
+        )
+        if om else []
+    )
 
-            for s in servicos:
-                chave = (s['militar_id'], s['calendario_dia__data'])
-                mapa_servicos[chave] = {
-                    'cor': s['calendario_dia__tipo_servico__cor_hex'],
-                    'nome': s['calendario_dia__tipo_servico__nome'],
+    # Seções por tipo de serviço
+    matriz_secoes = []
+    if om and tipo_escala_atual and militares_antiguidade and tipos_servico:
+        filtro_itens = dict(
+            militar_id__in=[m.id for m in militares_antiguidade],
+            escala__tipo_escala=tipo_escala_atual,
+            calendario_dia__data__year=matriz_ano,
+        )
+        if matriz_mes:
+            filtro_itens['calendario_dia__data__month'] = matriz_mes
+
+        todos_itens = (
+            EscalaItem.objects.filter(**filtro_itens)
+            .values(
+                'militar_id',
+                'calendario_dia__data',
+                'calendario_dia__tipo_servico_id',
+                'calendario_dia__tipo_servico__nome',
+                'calendario_dia__tipo_servico__cor_hex',
+            )
+            .order_by('calendario_dia__data')
+        )
+
+        # Agrupar por tipo de serviço → {ts_id: {mil_id: [datas]}}
+        por_ts = {}
+        for item in todos_itens:
+            ts_id = item['calendario_dia__tipo_servico_id']
+            mil_id = item['militar_id']
+            if ts_id not in por_ts:
+                por_ts[ts_id] = {
+                    'nome': item['calendario_dia__tipo_servico__nome'],
+                    'cor': item['calendario_dia__tipo_servico__cor_hex'],
+                    'por_militar': {},
                 }
+            por_ts[ts_id]['por_militar'].setdefault(mil_id, []).append(
+                item['calendario_dia__data']
+            )
 
-        # Construir matriz
-        matriz_linhas = []
-        for m in militares:
-            celulas = []
-            total = 0
-            for d in matriz_dias:
-                svc = mapa_servicos.get((m.id, d))
-                if svc:
-                    celulas.append({'cor': svc['cor'], 'nome': svc['nome']})
-                    total += 1
-                else:
-                    celulas.append(None)
-            matriz_linhas.append({
-                'militar': m,
-                'celulas': celulas,
-                'total': total,
+        for ts in tipos_servico:
+            bloco = por_ts.get(ts.id)
+            if not bloco:
+                # Sem registros neste tipo — inclui seção vazia para consistência
+                matriz_secoes.append({
+                    'tipo_servico': ts,
+                    'datas': [],
+                    'linhas': [{'militar': m, 'datas_set': set(), 'total': 0}
+                               for m in militares_antiguidade],
+                    'total_geral': 0,
+                })
+                continue
+
+            # Datas únicas ordenadas = cabeçalho das colunas
+            datas_unicas = sorted({
+                d for registros in bloco['por_militar'].values() for d in registros
             })
-    else:
-        matriz_linhas = []
+
+            linhas_ts = []
+            total_geral_ts = 0
+            for m in militares_antiguidade:
+                datas_mil = set(bloco['por_militar'].get(m.id, []))
+                total_geral_ts += len(datas_mil)
+                linhas_ts.append({
+                    'militar': m,
+                    'datas_set': datas_mil,
+                    'total': len(datas_mil),
+                })
+
+            matriz_secoes.append({
+                'tipo_servico': ts,
+                'datas': datas_unicas,
+                'linhas': linhas_ts,
+                'total_geral': total_geral_ts,
+            })
+
+    anos_opcoes_matriz = list(range(ano_atual + 1, ano_atual - 5, -1))
 
     return render(
         request,
@@ -920,8 +971,11 @@ def quadrinho_visao(request):
             'escala_atual': escala_atual,
             'militar_proprio': militar_proprio,
             'registros_por_militar': registros_por_militar,
-            'matriz_dias': matriz_dias,
-            'matriz_linhas': matriz_linhas,
+            'matriz_secoes': matriz_secoes,
+            'matriz_mes': matriz_mes,
+            'matriz_ano': matriz_ano,
+            'anos_opcoes_matriz': anos_opcoes_matriz,
+            'nomes_meses': NOMES_MESES,
         },
     )
 
