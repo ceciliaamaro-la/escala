@@ -857,6 +857,52 @@ def quadrinho_visao(request):
                 'observacao': item.observacao or '',
             })
 
+    # ── Matriz: militares × dias (todos os dias do ano) ────────────────────
+    matriz_dias = []
+    if om and militares:
+        # Gerar todos os dias do ano
+        from calendar import monthrange
+        for mes in range(1, 13):
+            ultimo_dia = monthrange(ano, mes)[1]
+            for dia in range(1, ultimo_dia + 1):
+                matriz_dias.append(date(ano, mes, dia))
+
+        # Criar mapa de serviços por (militar_id, data)
+        mapa_servicos = {}
+        if tipo_escala_atual:
+            servicos = EscalaItem.objects.filter(
+                militar_id__in=[m.id for m in militares],
+                calendario_dia__data__year=ano,
+                escala__tipo_escala=tipo_escala_atual,
+            ).values('militar_id', 'calendario_dia__data', 'calendario_dia__tipo_servico__cor_hex', 'calendario_dia__tipo_servico__nome')
+
+            for s in servicos:
+                chave = (s['militar_id'], s['calendario_dia__data'])
+                mapa_servicos[chave] = {
+                    'cor': s['calendario_dia__tipo_servico__cor_hex'],
+                    'nome': s['calendario_dia__tipo_servico__nome'],
+                }
+
+        # Construir matriz
+        matriz_linhas = []
+        for m in militares:
+            celulas = []
+            total = 0
+            for d in matriz_dias:
+                svc = mapa_servicos.get((m.id, d))
+                if svc:
+                    celulas.append({'cor': svc['cor'], 'nome': svc['nome']})
+                    total += 1
+                else:
+                    celulas.append(None)
+            matriz_linhas.append({
+                'militar': m,
+                'celulas': celulas,
+                'total': total,
+            })
+    else:
+        matriz_linhas = []
+
     return render(
         request,
         'cadastro/quadrinho_visao.html',
@@ -874,6 +920,8 @@ def quadrinho_visao(request):
             'escala_atual': escala_atual,
             'militar_proprio': militar_proprio,
             'registros_por_militar': registros_por_militar,
+            'matriz_dias': matriz_dias,
+            'matriz_linhas': matriz_linhas,
         },
     )
 

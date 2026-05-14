@@ -59,7 +59,7 @@
     </div>
 {% else %}
 
-<!-- ABAS: TOTAIS / REGISTROS DETALHADOS -->
+<!-- ABAS: TOTAIS / REGISTROS DETALHADOS / MATRIZ -->
 <ul class="nav nav-pills mb-3" id="pills-tab" role="tablist">
     <li class="nav-item" role="presentation">
         <button class="nav-link active" id="pills-totais-tab" data-bs-toggle="pill" data-bs-target="#pills-totais" type="button" role="tab">
@@ -69,6 +69,11 @@
     <li class="nav-item" role="presentation">
         <button class="nav-link" id="pills-registros-tab" data-bs-toggle="pill" data-bs-target="#pills-registros" type="button" role="tab">
             <i class="bi bi-list-check"></i> Registros Detalhados
+        </button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link" id="pills-matriz-tab" data-bs-toggle="pill" data-bs-target="#pills-matriz" type="button" role="tab">
+            <i class="bi bi-grid-3x3-gap"></i> Matriz
         </button>
     </li>
 </ul>
@@ -229,6 +234,62 @@
                         {% endif %}
                     </tbody>
                 </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- ABA: MATRIZ -->
+    <div class="tab-pane fade" id="pills-matriz" role="tabpanel">
+        <div class="card-mil">
+            <div class="card-mil-header">
+                <span><i class="bi bi-grid-3x3-gap"></i> Matriz de Serviços — {{ ano }}</span>
+            </div>
+            <div class="table-responsive" style="overflow-x: auto;">
+                <table class="table table-sm table-bordered mb-0" style="font-size: 0.75rem; min-width: 1200px;">
+                    <thead class="table-secondary">
+                        <tr>
+                            <th style="position: sticky; left: 0; background: #f8f9fa; z-index: 2; min-width: 120px;">Militar</th>
+                            <th style="min-width: 50px;">Posto</th>
+                            {% for dia in matriz_dias %}
+                            <th class="text-center" style="min-width: 20px; padding: 2px;" title="{{ dia|date:"d/m" }}">
+                                {{ dia|date:"j" }}
+                            </th>
+                            {% endfor %}
+                            <th style="min-width: 50px;">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in matriz_linhas %}
+                        <tr>
+                            <td style="position: sticky; left: 0; background: #fff; z-index: 1;">
+                                <strong>{{ row.militar.nome_guerra }}</strong>
+                            </td>
+                            <td>{{ row.militar.posto.sigla }}</td>
+                            {% for celula in row.celulas %}
+                            <td class="text-center p-0" style="padding: 0 !important;">
+                                {% if celula %}
+                                <span class="badge w-100 h-100 d-flex align-items-center justify-content-center"
+                                      style="background-color: {{ celula.cor }}; font-size: 0.65rem; padding: 2px;"
+                                      title="{{ celula.nome }}">
+                                </span>
+                                {% else %}
+                                <span style="opacity: 0.2;">·</span>
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                            <td class="text-center fw-bold">{{ row.total }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="{{ matriz_dias|length|add:3 }}" class="text-center text-muted py-4">
+                            Nenhum militar ativo nesta OM.
+                        </td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer small text-muted">
+                <i class="bi bi-info-circle"></i> Cada célula representa um dia do ano.
+                As cores indicam o tipo de serviço (Preto, Vermelho, Roxo).
             </div>
         </div>
     </div>
