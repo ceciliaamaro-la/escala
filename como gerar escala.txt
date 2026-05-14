@@ -5,3 +5,5 @@ Cheguei no topo, começo na 5C não esta vazia, depois 4C que esta vazia e uso
 assim vou sequindo a sequencia
 consegue ver o padrão de como e gerado a escala
 verifica se o sistema atual esta trabalhando assim
+
+tentando repo
