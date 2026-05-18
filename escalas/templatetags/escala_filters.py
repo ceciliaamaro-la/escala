@@ -36,3 +36,12 @@ def posto_nome(militar):
         return nome or sigla
     except AttributeError:
         return str(militar)
+
+
+@register.filter
+def range_filter(value):
+    """Retorna uma lista de 1 a N — ex: {{ 5|range }} retorna [1,2,3,4,5]"""
+    try:
+        return list(range(1, int(value) + 1))
+    except (ValueError, TypeError):
+        return []

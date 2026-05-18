@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Solicitar Troca - Sistema de Escala{% endblock %}
+
+{% block conteudo %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-dark text-light">
+                <h4 class="mb-0"><i class="bi bi-arrow-left-right"></i> Solicitar Troca de Serviço</h4>
+            </div>
+            <div class="card-body">
+                <form method="post" id="trocaForm">
+                    {% csrf_token %}
+
+                    <!-- Tipo de Escala -->
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Escala *</label>
+                        <select name="tipo_escala" id="tipoEscala" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            {% for tipo in tipos_escala %}
+                            <option value="{{ tipo.id }}">{{ tipo.nome }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <!-- Status da Escala -->
+                    <div class="mb-3">
+                        <label class="form-label">Tipo de Escala *</label>
+                        <select name="escala_status" id="escalaStatus" class="form-select" required>
+                            <option value="">Selecione...</option>
+                            <option value="previsao">Previsão</option>
+                            <option value="publicada">Escala Publicada</option>
+                        </select>
+                        <small class="text-muted">
+                            Previsão: só precisa de aprovação do escalante.<br>
+                            Publicada: precisa de aprovação do escalante e homologação do Chefe/Adjunto.
+                        </small>
+                    </div>
+
+                    <!-- Tipo de Troca -->
+                    <div class="mb-4">
+                        <label class="form-label">Tipo de Troca</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="tipo_troca" id="trocaSimples" value="simples" checked autocomplete="off">
+                            <label class="btn btn-outline-primary" for="trocaSimples">
+                                <i class="bi bi-arrow-right"></i> Troca Simples
+                            </label>
+
+                            <input type="radio" class="btn-check" name="tipo_troca" id="trocaMutua" value="mutua" autocomplete="off">
+                            <label class="btn btn-outline-warning" for="trocaMutua">
+                                <i class="bi bi-arrow-left-right"></i> Troca Mútua
+                            </label>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Primeiro militar (quem sai) -->
+                    <div class="alert alert-secondary">
+                        <h5 class="alert-heading"><i class="bi bi-person-dash"></i> Você (Militar que sai)</h5>
+                        <p class="mb-0"><strong>{{ militar_logado.nome_guerra }}</strong> ({{ militar_logado.posto.sigla }})</p>
+                    </div>
+
+                    <!-- Meus serviços -->
+                    <div class="mb-3">
+                        <label class="form-label">Selecione o dia de serviço para trocar *</label>
+                        <div id="servicosContainer">
+                            <div class="text-muted">Selecione o tipo de escala primeiro</div>
+                        </div>
+                    </div>
+
+                    <!-- Militar que entra (simples) -->
+                    <div id="militarEntraContainer">
+                        <div class="mb-3">
+                            <label class="form-label">Militar que vai assumir seu serviço *</label>
+                            <select name="militar_entra" id="militarEntra" class="form-select" required>
+                                <option value="">Selecione...</option>
+                                {% for m in militares %}
+                                <option value="{{ m.id }}">{{ m.nome_guerra }} ({{ m.posto.sigla }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Segunda perna (mútua) -->
+                    <div id="trocaMutuaContainer" style="display: none;">
+                        <hr>
+                        <div class="alert alert-warning">
+                            <h5 class="alert-heading"><i class="bi bi-arrow-left-right"></i> Segunda perna da troca</h5>
+                            <p class="mb-0">Selecione outro dia seu de serviço e o militar que vai assumir.</p>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Selecione outro dia de serviço para trocar *</label>
+                            <div id="servicosContainer2">
+                                <div class="text-muted">Selecione o tipo de escala primeiro</div>
+                            </div>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Militar que vai assumir este segundo serviço *</label>
+                            <select name="militar_entra_2" id="militarEntra2" class="form-select">
+                                <option value="">Selecione...</option>
+                                {% for m in militares %}
+                                <option value="{{ m.id }}">{{ m.nome_guerra }} ({{ m.posto.sigla }})</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Motivo -->
+                    <div class="mb-3">
+                        <label class="form-label">Motivo da troca *</label>
+                        <textarea name="motivo" class="form-control" rows="3" required placeholder="Informe o motivo da solicitação de troca..."></textarea>
+                    </div>
+
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-mil-dourado btn-lg">
+                            <i class="bi bi-send"></i> Solicitar Troca
+                        </button>
+                        <a href="{% url 'troca_listar' %}" class="btn btn-outline-secondary">
+                            Cancelar
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tipoEscala = document.getElementById('tipoEscala');
+    const escalaStatus = document.getElementById('escalaStatus');
+    const servicosContainer = document.getElementById('servicosContainer');
+    const servicosContainer2 = document.getElementById('servicosContainer2');
+    const trocaSimples = document.getElementById('trocaSimples');
+    const trocaMutua = document.getElementById('trocaMutua');
+    const trocaMutuaContainer = document.getElementById('trocaMutuaContainer');
+    const militarEntra = document.getElementById('militarEntra');
+    const militarEntra2 = document.getElementById('militarEntra2');
+
+    // Mudar visibilidade da segunda perna
+    function atualizarTipoTroca() {
+        if (trocaMutua.checked) {
+            trocaMutuaContainer.style.display = 'block';
+            militarEntra2.setAttribute('required', 'required');
+        } else {
+            trocaMutuaContainer.style.display = 'none';
+            militarEntra2.removeAttribute('required');
+            militarEntra2.value = '';
+        }
+    }
+
+    trocaSimples.addEventListener('change', atualizarTipoTroca);
+    trocaMutua.addEventListener('change', atualizarTipoTroca);
+
+    // Carregar serviços quando mudar tipo de escala
+    function carregarServicos(tipoEscalaId) {
+        if (!tipoEscalaId || !escalaStatus.value) {
+            servicosContainer.innerHTML = '<div class="text-muted">Selecione o tipo de escala e o status</div>';
+            return;
+        }
+
+        const url = `{% url 'troca_servicos_militar' %}?tipo_escala=${tipoEscalaId}`;
+
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                if (data.servicos && data.servicos.length > 0) {
+                    let html = '<div class="list-group" style="max-height: 300px; overflow-y: auto;">';
+                    data.servicos.forEach(servico => {
+                        html += `
+                            <label class="list-group-item list-group-item-action">
+                                <div class="d-flex w-100 justify-content-between align-items-center">
+                                    <div>
+                                        <input type="radio" name="data_servico_sai" value="${servico.data}" required>
+                                        <strong>${servico.data_display}</strong>
+                                        <span class="badge" style="background-color: ${servico.tipo_servico_cor}">${servico.tipo_servico}</span>
+                                    </div>
+                                    <small>${servico.escala_tipo}</small>
+                                </div>
+                            </label>
+                        `;
+                    });
+                    html += '</div>';
+                    servicosContainer.innerHTML = html;
+                    // Also update second container
+                    servicosContainer2.innerHTML = html.replace(/data_servico_sai/g, 'data_servico_sai_2');
+                } else {
+                    servicosContainer.innerHTML = '<div class="text-warning">Nenhum serviço encontrado para este mês</div>';
+                    servicosContainer2.innerHTML = servicosContainer.innerHTML;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                servicosContainer.innerHTML = '<div class="text-danger">Erro ao carregar serviços</div>';
+            });
+    }
+
+    tipoEscala.addEventListener('change', function() {
+        carregarServicos(this.value);
+    });
+
+    escalaStatus.addEventListener('change', function() {
+        carregarServicos(tipoEscala.value);
+    });
+});
+</script>
+{% endblock %}

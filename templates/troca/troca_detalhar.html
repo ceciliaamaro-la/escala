@@ -1,0 +1,240 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Detalhes da Troca - Sistema de Escala{% endblock %}
+
+{% block conteudo %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header bg-dark text-light d-flex justify-content-between align-items-center">
+                <h4 class="mb-0">Troca {{ troca.numero_controle }}</h4>
+                <span class="badge bg-{% if troca.status == 'pendente' %}warning{% elif troca.status == 'aprovada' %}success{% elif troca.status == 'reprovada' %}danger{% elif troca.status == 'homologada' %}primary{% endif %} fs-6">
+                    {{ troca.get_status_display }}
+                </span>
+            </div>
+            <div class="card-body">
+                <!-- Informações Gerais -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <p><strong>Tipo de Escala:</strong> {{ troca.tipo_escala.nome }}</p>
+                        <p><strong>Tipo de Troca:</strong>
+                            {% if troca.tipo_troca == 'mutua' %}
+                            <span class="badge bg-warning text-dark">Mútua</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Simples</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                    <div class="col-md-6">
+                        <p><strong>Escala:</strong>
+                            {% if troca.escala_status == 'previsao' %}
+                            <span class="badge bg-info">Previsão</span>
+                            {% else %}
+                            <span class="badge bg-success">Publicada</span>
+                            {% endif %}
+                        </p>
+                        <p><strong>Precisa Homologação:</strong>
+                            {% if troca.precisa_homologacao %}
+                            <span class="text-danger">Sim</span>
+                            {% else %}
+                            <span class="text-success">Não</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Primeira perna -->
+                <h5 class="mb-3"><i class="bi bi-arrow-right"></i> 1ª Troca</h5>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Militar que Sai</h6>
+                                <h5 class="text-danger">{{ troca.militar_sai.nome_guerra }}</h5>
+                                <small>{{ troca.militar_sai.posto.sigla }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Data do Serviço</h6>
+                                <h5>{{ troca.data_servico_sai|date:"d/m/Y" }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Militar que Entra</h6>
+                                {% if troca.militar_entra %}
+                                <h5 class="text-success">{{ troca.militar_entra.nome_guerra }}</h5>
+                                <small>{{ troca.militar_entra.posto.sigla }}</small>
+                                {% else %}
+                                <h5 class="text-muted">Pendente</h5>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Segunda perna (se mútua) -->
+                {% if troca.tipo_troca == 'mutua' and troca.militar_sai_2 %}
+                <h5 class="mb-3"><i class="bi bi-arrow-left-right"></i> 2ª Troca</h5>
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Militar que Sai</h6>
+                                <h5 class="text-danger">{{ troca.militar_sai_2.nome_guerra }}</h5>
+                                <small>{{ troca.militar_sai_2.posto.sigla }}</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Data do Serviço</h6>
+                                <h5>{{ troca.data_servico_sai_2|date:"d/m/Y" }}</h5>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card bg-light">
+                            <div class="card-body text-center">
+                                <h6 class="text-muted">Militar que Entra</h6>
+                                {% if troca.militar_entra_2 %}
+                                <h5 class="text-success">{{ troca.militar_entra_2.nome_guerra }}</h5>
+                                <small>{{ troca.militar_entra_2.posto.sigla }}</small>
+                                {% else %}
+                                <h5 class="text-muted">Pendente</h5>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <hr>
+
+                <!-- Motivo -->
+                <div class="mb-4">
+                    <h5><i class="bi bi-chat-left-text"></i> Motivo</h5>
+                    <p class="text-muted">{{ troca.motivo|linebreaks }}</p>
+                </div>
+
+                <hr>
+
+                <!-- Aprovações -->
+                <h5 class="mb-3"><i class="bi bi-check2-square"></i> Aprovações</h5>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card {% if troca.aprovada_militar_sai %}border-success{% else %}border-secondary{% endif %}">
+                            <div class="card-body">
+                                <h6>Aprovação Militar que Sai</h6>
+                                {% if troca.aprovada_militar_sai %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-clock"></i> Pendente</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card {% if troca.aprovada_militar_entra %}border-success{% elif troca.aprovada_militar_entra == False %}border-danger{% else %}border-secondary{% endif %}">
+                            <div class="card-body">
+                                <h6>Aprovação Militar que Entra</h6>
+                                {% if troca.aprovada_militar_entra %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% elif troca.aprovada_militar_entra == False %}
+                                <span class="text-danger"><i class="bi bi-x-circle-fill"></i> Reprovado</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-clock"></i> Pendente</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {% if troca.tipo_troca == 'mutua' %}
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card {% if troca.aprovada_militar_sai_2 %}border-success{% else %}border-secondary{% endif %}">
+                            <div class="card-body">
+                                <h6>Aprovação 2º Militar que Sai</h6>
+                                {% if troca.aprovada_militar_sai_2 %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-clock"></i> Pendente</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card {% if troca.aprovada_militar_entra_2 %}border-success{% elif troca.aprovada_militar_entra_2 == False %}border-danger{% else %}border-secondary{% endif %}">
+                            <div class="card-body">
+                                <h6>Aprovação 2º Militar que Entra</h6>
+                                {% if troca.aprovada_militar_entra_2 %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% elif troca.aprovada_militar_entra_2 == False %}
+                                <span class="text-danger"><i class="bi bi-x-circle-fill"></i> Reprovado</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-clock"></i> Pendente</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card {% if troca.aprobada_escalante == True %}border-success{% elif troca.aprobada_escalante == False %}border-danger{% else %}border-secondary{% endif %}">
+                            <div class="card-body">
+                                <h6>Aprovação do Escalante</h6>
+                                {% if troca.aprobada_escalante == True %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% elif troca.aprobada_escalante == False %}
+                                <span class="text-danger"><i class="bi bi-x-circle-fill"></i> Reprovado</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-clock"></i> Pendente</span>
+                                {% endif %}
+                                {% if troca.escalante_observacao %}
+                                <p class="small text-muted mb-0">{{ troca.escalante_observacao }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% if troca.precisa_homologacao %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card {% if troca.homologada == True %}border-success{% elif troca.homologada == False %}border-danger{% else %}border-secondary{% endif %}">
+                            <div class="card-body">
+                                <h6>Homologação do Chefe/Adjunto</h6>
+                                {% if troca.homologada == True %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Homologado</span>
+                                {% elif troca.homologada == False %}
+                                <span class="text-danger"><i class="bi bi-x-circle-fill"></i> Reprovado</span>
+                                {% else %}
+                                <span class="text-muted"><i class="bi bi-clock"></i> Pendente</span>
+                                {% endif %}
+                                {% if troca.homologacao_observacao %}
+                                <p class="small text-muted mb-0">{{ troca.homologacao_observacao }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+
+                <div class="d-flex justify-content-between mt-4">
+                    <a href="{% url 'troca_listar' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Voltar
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -106,6 +106,13 @@
                             <i class="bi bi-broadcast"></i> Sobreaviso
                         </a>
                     </li>
+                    {% if user.perfil == 'militar' or user.perfil == 'escalante' or user.perfil == 'chefe' or user.perfil == 'adjunto' %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if 'troca' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'troca_listar' %}">
+                            <i class="bi bi-arrow-left-right"></i> Troca
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
 
                 <div class="d-flex align-items-center gap-2">

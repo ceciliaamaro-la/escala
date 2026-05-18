@@ -20,6 +20,8 @@ from datetime import datetime, timedelta
 class PerfilUsuario(models.TextChoices):
     """Perfis disponíveis no sistema"""
     ADMIN_OM = "admin_om", "Administrador da OM"
+    CHEFE = "chefe", "Chefe (Publica escalas)"
+    ADJUNTO = "adjunto", "Adjunto (Publica escalas)"
     ESCALANTE = "escalante", "Escalante (Gera escalas)"
     MILITAR = "militar", "Militar (Consulta apenas)"
     GERENTE = "gerente", "Gerente (Leitura e relatórios)"
@@ -104,10 +106,26 @@ class UsuarioCustomizado(AbstractUser):
     def pode_escalar(self) -> bool:
         """Verifica se o usuário tem permissão para gerar escalas"""
         return self.perfil == PerfilUsuario.ESCALANTE and self.ativo
-    
+
     def pode_administrar(self) -> bool:
         """Verifica se o usuário é admin de OM"""
         return self.perfil == PerfilUsuario.ADMIN_OM and self.ativo
+
+    def pode_publicar_escala(self) -> bool:
+        """Verifica se o usuário pode publicar escalas (Chefe ou Adjunto)"""
+        return self.perfil in [PerfilUsuario.CHEFE, PerfilUsuario.ADJUNTO] and self.ativo
+
+    def e_chefe(self) -> bool:
+        """Verifica se o usuário é Chefe"""
+        return self.perfil == PerfilUsuario.CHEFE and self.ativo
+
+    def e_adjunto(self) -> bool:
+        """Verifica se o usuário é Adjunto"""
+        return self.perfil == PerfilUsuario.ADJUNTO and self.ativo
+
+    def e_escalante(self) -> bool:
+        """Verifica se o usuário é Escalante"""
+        return self.perfil == PerfilUsuario.ESCALANTE and self.ativo
     
     def obter_oms_acesso(self):
         """Retorna as OMs que o usuário pode acessar"""
@@ -1417,3 +1435,290 @@ class PonteiroEscala(models.Model):
             tipo_servico=tipo_servico,
             defaults={'ultimo_militar_id': militar_id},
         )
+
+
+# ============================================================================
+# TROCA DE SERVIÇO
+# ============================================================================
+
+class TrocaServico(models.Model):
+    """Registro de troca de serviço entre militares"""
+
+    STATUS_CHOICES = [
+        ('pendente', 'Pendente'),
+        ('aprovada', 'Aprovada'),
+        ('reprovada', 'Reprovada'),
+        ('homologada', 'Homologada'),
+    ]
+
+    TIPO_CHOICES = [
+        ('simples', 'Troca Simples'),
+        ('mutua', 'Troca Mútua'),
+    ]
+
+    # Número de controle formatado: DIA/MES/ANO (ex: 15/05/2026)
+    numero_controle = models.CharField(
+        max_length=20,
+        unique=True,
+        help_text="Número de controle no formato DD/MM/AAAA"
+    )
+
+    organizacao_militar = models.ForeignKey(
+        OrganizacaoMilitar,
+        on_delete=models.CASCADE,
+        related_name='trocas_servico',
+        help_text="OM onde a troca foi solicitada"
+    )
+
+    # Tipo de escala (Permanência, Sobreaviso, etc.)
+    tipo_escala = models.ForeignKey(
+        TipoEscala,
+        on_delete=models.PROTECT,
+        related_name='trocas_servico'
+    )
+
+    tipo_troca = models.CharField(
+        max_length=10,
+        choices=TIPO_CHOICES,
+        default='simples'
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pendente'
+    )
+
+    # Se é previsão ou escala publicada
+    escala_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('previsao', 'Previsão'),
+            ('publicada', 'Escala Publicada'),
+        ],
+        help_text="Indica se a troca foi feita na previsão ou escala publicada"
+    )
+
+    # ===== TROCA SIMPLES =====
+    # Militar que está de serviço e quer trocar
+    militar_sai = models.ForeignKey(
+        Militar,
+        on_delete=models.PROTECT,
+        related_name='trocas_como_sai',
+        help_text="Militar que vai sair do serviço"
+    )
+
+    # Dia em que o militar_sai está de serviço
+    data_servico_sai = models.DateField(
+        help_text="Data do serviço do militar que sai"
+    )
+
+    # Militar que vai assumir o serviço
+    militar_entra = models.ForeignKey(
+        Militar,
+        on_delete=models.PROTECT,
+        related_name='trocas_como_entra',
+        help_text="Militar que vai assumir o serviço",
+        null=True,
+        blank=True
+    )
+
+    # ===== TROCA MÚTUA (segunda perna) =====
+    militar_sai_2 = models.ForeignKey(
+        Militar,
+        on_delete=models.PROTECT,
+        related_name='trocas_como_sai_2',
+        help_text="Segundo militar que sai (para troca mútua)",
+        null=True,
+        blank=True
+    )
+
+    data_servico_sai_2 = models.DateField(
+        help_text="Data do serviço do segundo militar",
+        null=True,
+        blank=True
+    )
+
+    militar_entra_2 = models.ForeignKey(
+        Militar,
+        on_delete=models.PROTECT,
+        related_name='trocas_como_entra_2',
+        help_text="Segundo militar que entra (para troca mútua)",
+        null=True,
+        blank=True
+    )
+
+    # Motivo da troca
+    motivo = models.TextField(
+        help_text="Motivo da solicitação de troca"
+    )
+
+    # ===== APROVAÇÕES =====
+    # Militar que inicia approves
+    aprovada_militar_sai = models.BooleanField(
+        default=False,
+        help_text="Militar que sai aprovou a troca"
+    )
+
+    aprovada_militar_entra = models.BooleanField(
+        default=False,
+        help_text="Militar que entra aprovou a troca (ou None se ainda não selecionou)"
+    )
+
+    # ===== TROCA MÚTUA - APROVAÇÕES =====
+    aprovada_militar_sai_2 = models.BooleanField(
+        default=False,
+        help_text="Segundo militar que sai aprovou a troca"
+    )
+
+    aprovada_militar_entra_2 = models.BooleanField(
+        default=False,
+        help_text="Segundo militar que entra aprovou a troca"
+    )
+
+    # Escalante aprova ou reprova
+    aprobada_escalante = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Aprovação do escalante (True=Aprovada, False=Reprovada, Null=Pendente)"
+    )
+    data_aprovacao_escalante = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Data da aprovação/reprovação pelo escalante"
+    )
+    escalante_observacao = models.TextField(
+        blank=True,
+        help_text="Observação do escalante ao aprovar/reprovar"
+    )
+
+    # Chefe/Adjunto homologa
+    homologada = models.BooleanField(
+        null=True,
+        blank=True,
+        help_text="Homologação do Chefe/Adjunto (True=Homologada, False=Reprovada, Null=Pendente)"
+    )
+    data_homologacao = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Data da homologação pelo Chefe/Adjunto"
+    )
+    homologacao_observacao = models.TextField(
+        blank=True,
+        help_text="Observação do Chefe/Adjunto ao homologar"
+    )
+
+    # Usuários que realizou as ações
+    usuario_solicitacao = models.ForeignKey(
+        UsuarioCustomizado,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='trocas_solicitadas'
+    )
+
+    usuario_escalante = models.ForeignKey(
+        UsuarioCustomizado,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='trocas_aprovadas_escalante'
+    )
+
+    usuario_chefe = models.ForeignKey(
+        UsuarioCustomizado,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='trocas_homologadas'
+    )
+
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_atualizacao = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'troca_servico'
+        ordering = ['-data_criacao']
+        indexes = [
+            models.Index(fields=['organizacao_militar', 'status']),
+            models.Index(fields=['militar_sai', 'data_criacao']),
+            models.Index(fields=['status', 'data_criacao']),
+        ]
+
+    def __str__(self):
+        return f"{self.numero_controle} - {self.militar_sai.nome_guerra} → {self.militar_entra.nome_guerra if self.militar_entra else '?'}"
+
+    def save(self, *args, **kwargs):
+        if not self.numero_controle:
+            self.numero_controle = self.gerar_numero_controle()
+        super().save(*args, **kwargs)
+
+    def gerar_numero_controle(self) -> str:
+        """Gera número de controle no formato DD/MM/AAAA"""
+        from datetime import date
+
+        hoje = date.today()
+        dia = hoje.day
+        mes = hoje.month
+        ano = hoje.year
+
+        # Contar trocas este mês
+        count = TrocaServico.objects.filter(
+            organizacao_militar=self.organizacao_militar_id,
+            data_criacao__year=ano,
+            data_criacao__month=mes
+        ).count() + 1
+
+        return f"{dia:02d}/{mes:02d}/{ano}-{count:03d}"
+
+    def pode_aceitar(self, militar: 'Militar') -> bool:
+        """Verifica se o militar pode aceitar esta troca"""
+        if self.status != 'pendente':
+            return False
+
+        if self.tipo_troca == 'simples':
+            return militar == self.militar_entra and not self.aprovada_militar_entra
+        else:
+            # Troca mútua
+            return (militar == self.militar_entra or militar == self.militar_entra_2)
+
+    def pode_aprovar_escalante(self, usuario: 'UsuarioCustomizado') -> bool:
+        """Verifica se o usuário (escalante) pode aprovar esta troca"""
+        if self.status != 'pendente':
+            return False
+
+        # Ambos os militares devem ter aprovado
+        if self.tipo_troca == 'simples':
+            return self.aprovada_militar_sai and self.aprovada_militar_entra is not None
+        else:
+            return (self.aprovada_militar_sai and self.aprovada_militar_entra and
+                    self.aprovada_militar_sai_2 and self.aprovada_militar_entra_2)
+
+    def pode_homologar(self, usuario: 'UsuarioCustomizado') -> bool:
+        """Verifica se o usuário (chefe/adjunto) pode homologar esta troca"""
+        if not usuario.pode_publicar_escala():
+            return False
+
+        if self.escala_status == 'previsao':
+            # Previsão não precisa de homologação
+            return False
+
+        # Se for publicada, precisa de aprovação do escalante
+        return self.status == 'aprovada'
+
+    @property
+    def precisa_homologacao(self) -> bool:
+        """Retorna True se a escala está publicada e precisa de homologação"""
+        return self.escala_status == 'publicada'
+
+    @property
+    def militares_envolvidos(self) -> list:
+        """Retorna lista de militares envolvidos na troca"""
+        lista = [self.militar_sai]
+        if self.militar_entra:
+            lista.append(self.militar_entra)
+        if self.tipo_troca == 'mutua':
+            if self.militar_sai_2 and self.militar_sai_2 not in lista:
+                lista.append(self.militar_sai_2)
+            if self.militar_entra_2 and self.militar_entra_2 not in lista:
+                lista.append(self.militar_entra_2)
+        return lista

@@ -144,4 +144,13 @@ urlpatterns = [
     # Exemplos: /escala/permanencia/  /escala/eletricista/  /matriz/sobreaviso/
     path('escala/<slug:slug>/', views.escala_publica, name='escala_publica'),
     path('matriz/<slug:slug>/', views.matriz_publica, name='matriz_publica'),
+
+    # Troca de Serviço
+    path('troca/', views.troca_listar, name='troca_listar'),
+    path('troca/solicitar/', views.troca_solicitar, name='troca_solicitar'),
+    path('troca/servicos/', views.troca_servicos_militar, name='troca_servicos_militar'),
+    path('troca/<int:troca_id>/aceitar/', views.troca_aceitar, name='troca_aceitar'),
+    path('troca/<int:troca_id>/aprovar/', views.troca_aprovar_escalante, name='troca_aprovar_escalante'),
+    path('troca/<int:troca_id>/homologar/', views.troca_homologar, name='troca_homologar'),
+    path('troca/<int:troca_id>/', views.troca_detalhar, name='troca_detalhar'),
 ]

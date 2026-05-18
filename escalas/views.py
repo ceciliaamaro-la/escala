@@ -12,8 +12,10 @@ from datetime import date as _date, date, timedelta
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Q
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils import timezone
 from django.views.decorators.http import require_POST
 
 from .context_processors import SESSION_KEY_OM, obter_om_da_sessao
@@ -47,6 +49,7 @@ from .models import (
     TipoEscala,
     TipoIndisponibilidade,
     TipoServico,
+    TrocaServico,
     UsuarioCustomizado,
 )
 
@@ -1657,7 +1660,12 @@ def escala_marcar_previsao(request, escala_id):
 @login_required
 @require_POST
 def escala_publicar(request, escala_id):
-    """Publica a escala (status → publicada)."""
+    """Publica a escala (status → publicada). Apenas Chefe ou Adjunto podem publicar."""
+    usuario = request.user
+    if not usuario.pode_publicar_escala():
+        messages.error(request, 'Apenas Chefes ou Adjuntos podem publicar escalas.')
+        return redirect('escala_detalhar', escala_id=escala_id)
+
     escala = get_object_or_404(Escala, pk=escala_id)
     if not escala.itens.exists():
         messages.error(request, 'Escala vazia — preencha antes de publicar.')
@@ -2359,3 +2367,452 @@ def quadrinho_exportar(request):
 
     wb.save(response)
     return response
+
+
+# ---------------------------------------------------------------------------
+# TROCA DE SERVIÇO
+# ---------------------------------------------------------------------------
+
+@login_required
+def troca_listar(request):
+    """Lista de trocas de serviço - diferenciado por perfil"""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.error(request, "Selecione uma OM primeiro.")
+        return redirect('dashboard')
+
+    usuario = request.user
+    militar_logado = getattr(usuario, 'militar_associado', None)
+
+    # Se é militar comum, mostra só as suas próprias trocas
+    if usuario.perfil == PerfilUsuario.MILITAR and militar_logado:
+        # Mostrar trocas onde é quem sai OU quem entra
+        trocas = TrocaServico.objects.filter(
+            organizacao_militar=om
+        ).filter(
+            Q(militar_sai=militar_logado) |
+            Q(militar_entra=militar_logado) |
+            Q(militar_entra_2=militar_logado)
+        ).select_related(
+            'militar_sai', 'militar_entra', 'militar_sai_2', 'militar_entra_2',
+            'tipo_escala', 'organizacao_militar'
+        ).order_by('-data_criacao')
+
+        # Contagem para o mês atual
+        hoje = date.today()
+        trocas_mes = trocas.filter(data_criacao__year=hoje.year, data_criacao__month=hoje.month).count()
+
+        return render(request, 'troca/troca_militar_listar.html', {
+            'trocas': trocas,
+            'trocas_mes': trocas_mes,
+            'om': om,
+            'militar_logado': militar_logado,
+        })
+
+    # Se é escalante, mostra todas as trocas pendentes e criadas
+    elif usuario.e_escalante():
+        # Lista todas as trocas, mais recentes primeiro
+        trocas = TrocaServico.objects.filter(
+            organizacao_militar=om
+        ).select_related(
+            'militar_sai', 'militar_entra', 'militar_sai_2', 'militar_entra_2',
+            'tipo_escala', 'organizacao_militar'
+        ).order_by('-data_criacao')
+
+        # Paginação
+        pagina = int(request.GET.get('pagina', 1))
+        por_pagina = 20
+        total = trocas.count()
+        trocas_pagina = trocas[(pagina - 1) * por_pagina:pagina * por_pagina]
+
+        # Contagem para o mês atual
+        hoje = date.today()
+        trocas_mes = trocas.filter(data_criacao__year=hoje.year, data_criacao__month=hoje.month).count()
+
+        return render(request, 'troca/troca_escalante_listar.html', {
+            'trocas': trocas_pagina,
+            'total': total,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total_paginas': (total + por_pagina - 1) // por_pagina,
+            'trocas_mes': trocas_mes,
+            'om': om,
+        })
+
+    # Se é Chefe ou Adjunto, mostra trocas aprovadas (precisam de homologação)
+    elif usuario.pode_publicar_escala():
+        # Só mostra as que precisam de homologação (escala publicada)
+        trocas = TrocaServico.objects.filter(
+            organizacao_militar=om,
+            status='aprovada',
+            escala_status='publicada'
+        ).select_related(
+            'militar_sai', 'militar_entra', 'militar_sai_2', 'militar_entra_2',
+            'tipo_escala', 'organizacao_militar'
+        ).order_by('-data_criacao')
+
+        # Paginação
+        pagina = int(request.GET.get('pagina', 1))
+        por_pagina = 20
+        total = trocas.count()
+        trocas_pagina = trocas[(pagina - 1) * por_pagina:pagina * por_pagina]
+
+        # Contagem para o mês atual
+        hoje = date.today()
+        trocas_mes = TrocaServico.objects.filter(
+            organizacao_militar=om,
+            data_criacao__year=hoje.year,
+            data_criacao__month=hoje.month
+        ).count()
+
+        return render(request, 'troca/troca_chefe_listar.html', {
+            'trocas': trocas_pagina,
+            'total': total,
+            'pagina': pagina,
+            'por_pagina': por_pagina,
+            'total_paginas': (total + por_pagina - 1) // por_pagina,
+            'trocas_mes': trocas_mes,
+            'om': om,
+        })
+
+    # Outros perfis (admin, gerente, etc) - redireciona para escala
+    messages.info(request, "Você não tem acesso a esta funcionalidade.")
+    return redirect('dashboard')
+
+
+@login_required
+def troca_servicos_militar(request):
+    """Retorna os serviços do militar logado no mês atual"""
+    om = obter_om_ativa(request)
+    if not om:
+        return JsonResponse({'erro': 'Nenhuma OM ativa'}, status=400)
+
+    usuario = request.user
+    militar_logado = getattr(usuario, 'militar_associado', None)
+    if not militar_logado:
+        return JsonResponse({'erro': 'Usuário não é militar'}, status=400)
+
+    # Pegar mês/ano dos parâmetros ou usar atual
+    mes = int(request.GET.get('mes', date.today().month))
+    ano = int(request.GET.get('ano', date.today().year))
+    tipo_escala_id = request.GET.get('tipo_escala')
+
+    # Buscar escalas do mês (previsão e publicada)
+    escalas = Escala.objects.filter(
+        organizacao_militar=om,
+        mes=mes,
+        ano=ano,
+        status__in=['previsao', 'publicada']
+    )
+
+    # Filtrar por tipo de escala se especificado
+    if tipo_escala_id:
+        escalas = escalas.filter(tipo_escala_id=tipo_escala_id)
+
+    servicos = []
+    for escala in escalas:
+        itens = EscalaItem.objects.filter(
+            escala=escala,
+            militar=militar_logado
+        ).select_related('calendario_dia', 'calendario_dia__tipo_servico')
+
+        for item in itens:
+            servicos.append({
+                'id': item.id,
+                'data': item.calendario_dia.data.strftime('%Y-%m-%d'),
+                'data_display': item.calendario_dia.data.strftime('%d/%m/%Y'),
+                'tipo_servico': item.calendario_dia.tipo_servico.nome,
+                'tipo_servico_cor': item.calendario_dia.tipo_servico.cor_hex,
+                'escala_tipo': escala.tipo_escala.nome,
+                'escala_status': escala.status,
+            })
+
+    # Ordenar por data
+    servicos.sort(key=lambda x: x['data'])
+
+    return JsonResponse({'servicos': servicos})
+
+
+@login_required
+def troca_solicitar(request):
+    """Formulário para solicitar troca de serviço"""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.error(request, "Selecione uma OM primeiro.")
+        return redirect('dashboard')
+
+    usuario = request.user
+    militar_logado = getattr(usuario, 'militar_associado', None)
+    if not militar_logado:
+        messages.error(request, "Apenas militares podem solicitar troca.")
+        return redirect('dashboard')
+
+    # Se veio do POST, processar o formulário
+    if request.method == 'POST':
+        tipo_troca = request.POST.get('tipo_troca', 'simples')
+        tipo_escala_id = request.POST.get('tipo_escala')
+        escala_status = request.POST.get('escala_status')
+        motivo = request.POST.get('motivo')
+
+        # Dados da primeira perna (militar que sai)
+        data_servico_sai = request.POST.get('data_servico_sai')
+        militar_entra_id = request.POST.get('militar_entra')
+
+        if not all([tipo_escala_id, data_servico_sai, militar_entra_id, motivo]):
+            messages.error(request, "Preencha todos os campos obrigatórios.")
+            return redirect('troca_solicitar')
+
+        tipo_escala = get_object_or_404(TipoEscala, id=tipo_escala_id)
+        militar_entra = get_object_or_404(Militar, id=militar_entra_id, organizacao_militar=om)
+
+        # Criar a troca
+        troca = TrocaServico.objects.create(
+            organizacao_militar=om,
+            tipo_escala=tipo_escala,
+            tipo_troca=tipo_troca,
+            escala_status=escala_status,
+            militar_sai=militar_logado,
+            data_servico_sai=data_servico_sai,
+            militar_entra=militar_entra,
+            motivo=motivo,
+            aprovada_militar_sai=True,  # Quem solicita já aprova
+            usuario_solicitacao=usuario,
+        )
+
+        # Se é troca mútua, criar a segunda perna
+        if tipo_troca == 'mutua':
+            militar_entra_2_id = request.POST.get('militar_entra_2')
+            data_servico_sai_2 = request.POST.get('data_servico_sai_2')
+
+            if not militar_entra_2_id or not data_servico_sai_2:
+                messages.error(request, "Para troca mútua, preencha os dados do segundo militar.")
+                troca.delete()
+                return redirect('troca_solicitar')
+
+            militar_entra_2 = get_object_or_404(Militar, id=militar_entra_2_id, organizacao_militar=om)
+
+            # Buscar o militar que sai do segundo dia (o que o militar_logado vai assumir)
+            # Na verdade, para a segunda perna:
+            # - O militar_logado vai assumir o serviço do dia data_servico_sai_2 (do militar_entra_2)
+            # - O militar_entra_2 vai assumir o serviço do dia data_servico_sai (do militar_logado)
+            troca.militar_sai_2 = militar_entra_2
+            troca.data_servico_sai_2 = data_servico_sai_2
+            troca.militar_entra_2 = militar_logado  # Quem iniciou também entra na segunda perna
+            troca.save()
+
+        messages.success(request, f"Troca solicitada! Número de controle: {troca.numero_controle}")
+        return redirect('troca_listar')
+
+    # GET - mostrar formulário
+    # Buscar tipos de escala
+    tipos_escala = TipoEscala.objects.filter(ativo=True).order_by('nome')
+
+    # Buscar militares da OM (exceto o logado)
+    militares = Militar.objects.filter(
+        organizacao_militar=om,
+        ativo=True
+    ).exclude(id=militar_logado.id).select_related('posto').order_by('nome_guerra')
+
+    return render(request, 'troca/troca_solicitar.html', {
+        'tipos_escala': tipos_escala,
+        'militares': militares,
+        'militar_logado': militar_logado,
+        'om': om,
+    })
+
+
+@login_required
+def troca_aceitar(request, troca_id):
+    """Aceitar ou recusar uma troca (para militar)"""
+    om = obter_om_ativa(request)
+    if not om:
+        return JsonResponse({'erro': 'Nenhuma OM ativa'}, status=400)
+
+    usuario = request.user
+    militar_logado = getattr(usuario, 'militar_associado', None)
+    if not militar_logado:
+        return JsonResponse({'erro': 'Usuário não é militar'}, status=400)
+
+    troca = get_object_or_404(TrocaServico, id=troca_id, organizacao_militar=om)
+
+    if request.method == 'POST':
+        acao = request.POST.get('acao')  # 'aceitar' ou 'rejeitar'
+
+        if acao == 'aceitar':
+            # Verificar qual posição o militar ocupa
+            if militar_logado == troca.militar_entra:
+                troca.aprovada_militar_entra = True
+            elif militar_logado == troca.militar_entra_2:
+                troca.aprovada_militar_entra_2 = True
+            else:
+                return JsonResponse({'erro': 'Você não está envolvido nesta troca'}, status=400)
+        else:  # rejeitar
+            if militar_logado == troca.militar_entra:
+                troca.aprovada_militar_entra = False
+            elif militar_logado == troca.militar_entra_2:
+                troca.aprovada_militar_entra_2 = False
+            else:
+                return JsonResponse({'erro': 'Você não está envolvido nesta troca'}, status=400)
+
+        troca.save()
+        return JsonResponse({'success': True, 'status': troca.get_status_display()})
+
+    return JsonResponse({'erro': 'Método não permitido'}, status=405)
+
+
+@login_required
+def troca_aprovar_escalante(request, troca_id):
+    """Aprovar ou reprovar uma troca (escalante)"""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.error(request, "Selecione uma OM primeiro.")
+        return redirect('dashboard')
+
+    usuario = request.user
+    if not usuario.e_escalante():
+        messages.error(request, "Apenas escalantes podem aprovar trocas.")
+        return redirect('dashboard')
+
+    troca = get_object_or_404(TrocaServico, id=troca_id, organizacao_militar=om)
+
+    if request.method == 'POST':
+        acao = request.POST.get('acao')  # 'aprovar' ou 'reprovar'
+        observacao = request.POST.get('observacao', '')
+
+        if acao == 'aprovar':
+            troca.aprobada_escalante = True
+            troca.status = 'aprovada'
+        else:
+            troca.aprobada_escalante = False
+            troca.status = 'reprovada'
+
+        troca.escalante_observacao = observacao
+        troca.data_aprovacao_escalante = timezone.now()
+        troca.usuario_escalante = usuario
+        troca.save()
+
+        messages.success(request, f"Troca {troca.numero_controle} {'aprovada' if acao == 'aprovar' else 'reprovada'}.")
+        return redirect('troca_listar')
+
+    return redirect('troca_listar')
+
+
+@login_required
+def troca_homologar(request, troca_id):
+    """Homologar ou reprovar uma troca (chefe/adjunto)"""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.error(request, "Selecione uma OM primeiro.")
+        return redirect('dashboard')
+
+    usuario = request.user
+    if not usuario.pode_publicar_escala():
+        messages.error(request, "Apenas Chefes ou Adjuntos podem homologar trocas.")
+        return redirect('dashboard')
+
+    troca = get_object_or_404(TrocaServico, id=troca_id, organizacao_militar=om)
+
+    if request.method == 'POST':
+        acao = request.POST.get('acao')  # 'homologar' ou 'reprovar'
+        observacao = request.POST.get('observacao', '')
+
+        if acao == 'homologar':
+            troca.homologada = True
+            troca.status = 'homologada'
+
+            # === EXECUTAR A TROCA NA ESCALA ===
+            # Atualizar os itens da escala
+            escala = Escala.objects.filter(
+                organizacao_militar=om,
+                tipo_escala=troca.tipo_escala,
+                mes=troca.data_servico_sai.month,
+                ano=troca.data_servico_sai.year,
+                status='publicada'
+            ).first()
+
+            if escala:
+                # Primeira perna: militar_sai sai, militar_entra assume
+                try:
+                    item_sai = EscalaItem.objects.get(
+                        escala=escala,
+                        calendario_dia__data=troca.data_servico_sai,
+                        militar=troca.militar_sai
+                    )
+                    item_sai.militar = troca.militar_entra
+                    item_sai.observacao = f"Troca {troca.numero_controle}: {troca.militar_sai.nome_guerra} → {troca.militar_entra.nome_guerra}"
+                    item_sai.save()
+
+                    # Atualizar quadrinho
+                    Quadrinho.incrementar(
+                        militar=troca.militar_entra,
+                        tipo_escala=troca.tipo_escala,
+                        tipo_servico=item_sai.calendario_dia.tipo_servico,
+                        ano=escala.ano,
+                    )
+                    Quadrinho.incrementar(
+                        militar=troca.militar_sai,
+                        tipo_escala=troca.tipo_escala,
+                        tipo_servico=item_sai.calendario_dia.tipo_servico,
+                        ano=escala.ano,
+                        quantidade=-1,
+                    )
+                except EscalaItem.DoesNotExist:
+                    messages.warning(request, "Item da escala não encontrado para a primeira perna.")
+
+                # Segunda perna (se for troca mútua)
+                if troca.tipo_troca == 'mutua' and troca.data_servico_sai_2:
+                    try:
+                        item_sai_2 = EscalaItem.objects.get(
+                            escala=escala,
+                            calendario_dia__data=troca.data_servico_sai_2,
+                            militar=troca.militar_sai_2
+                        )
+                        item_sai_2.militar = troca.militar_entra_2
+                        item_sai_2.observacao = f"Troca {troca.numero_controle}: {troca.militar_sai_2.nome_guerra} → {troca.militar_entra_2.nome_guerra}"
+                        item_sai_2.save()
+
+                        # Atualizar quadrinho
+                        Quadrinho.incrementar(
+                            militar=troca.militar_entra_2,
+                            tipo_escala=troca.tipo_escala,
+                            tipo_servico=item_sai_2.calendario_dia.tipo_servico,
+                            ano=escala.ano,
+                        )
+                        Quadrinho.incrementar(
+                            militar=troca.militar_sai_2,
+                            tipo_escala=troca.tipo_escala,
+                            tipo_servico=item_sai_2.calendario_dia.tipo_servico,
+                            ano=escala.ano,
+                            quantidade=-1,
+                        )
+                    except EscalaItem.DoesNotExist:
+                        messages.warning(request, "Item da escala não encontrado para a segunda perna.")
+        else:
+            troca.homologada = False
+            troca.status = 'reprovada'
+
+        troca.homologacao_observacao = observacao
+        troca.data_homologacao = date.today()
+        troca.usuario_chefe = usuario
+        troca.save()
+
+        messages.success(request, f"Troca {troca.numero_controle} {'homologada' if acao == 'homologar' else 'reprovada'}.")
+        return redirect('troca_listar')
+
+    return redirect('troca_listar')
+
+
+@login_required
+def troca_detalhar(request, troca_id):
+    """Ver detalhes de uma troca"""
+    om = obter_om_ativa(request)
+    if not om:
+        messages.error(request, "Selecione uma OM primeiro.")
+        return redirect('dashboard')
+
+    troca = get_object_or_404(TrocaServico, id=troca_id, organizacao_militar=om)
+
+    return render(request, 'troca/troca_detalhar.html', {
+        'troca': troca,
+        'om': om,
+    })

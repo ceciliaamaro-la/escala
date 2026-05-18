@@ -1,0 +1,189 @@
+{% extends 'base.html' %}
+
+{% block titulo %}Minhas Trocas - Sistema de Escala{% endblock %}
+
+{% block conteudo %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-arrow-left-right"></i> Minhas Trocas de Serviço</h2>
+            <a href="{% url 'troca_solicitar' %}" class="btn btn-mil-dourado">
+                <i class="bi bi-plus-lg"></i> Solicitar Troca
+            </a>
+        </div>
+
+        {% if trocas_mes > 0 %}
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i>
+            Você realizou <strong>{{ trocas_mes }}</strong> troca(s) este mês.
+        </div>
+        {% endif %}
+
+        {% if not trocas %}
+        <div class="alert alert-secondary text-center">
+            <i class="bi bi-inbox"></i>
+            Nenhuma troca registrada até o momento.
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nº Controle</th>
+                        <th>Minha Função</th>
+                        <th>Tipo</th>
+                        <th>Tipo Escala</th>
+                        <th>Quem Sai</th>
+                        <th>Data</th>
+                        <th>Quem Entra</th>
+                        <th>Minha Aprovação</th>
+                        <th>Status</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for troca in trocas %}
+                    <tr>
+                        <td><strong>{{ troca.numero_controle }}</strong></td>
+                        <td>
+                            {% if troca.militar_sai == militar_logado %}
+                            <span class="badge bg-primary">Solicitante</span>
+                            {% elif troca.militar_entra == militar_logado or troca.militar_entra_2 == militar_logado %}
+                            <span class="badge bg-info">Convocado</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if troca.tipo_troca == 'mutua' %}
+                            <span class="badge bg-warning text-dark">Mútua</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Simples</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {{ troca.tipo_escala.nome }}
+                            {% if troca.escala_status == 'previsao' %}
+                            <span class="badge bg-info">Previsão</span>
+                            {% else %}
+                            <span class="badge bg-success">Publicada</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ troca.militar_sai.nome_guerra }}</td>
+                        <td>{{ troca.data_servico_sai|date:"d/m" }}</td>
+                        <td>
+                            {% if troca.militar_entra %}
+                            {{ troca.militar_entra.nome_guerra }}
+                            {% else %}
+                            <span class="text-muted">Pendente</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if troca.militar_sai == militar_logado %}
+                                {% if troca.aprovada_militar_sai %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            {% elif troca.militar_entra == militar_logado %}
+                                {% if troca.aprovada_militar_entra %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% elif troca.aprovada_militar_entra == False %}
+                                <span class="text-danger"><i class="bi bi-x-circle-fill"></i> Recusado</span>
+                                {% elif troca.status == 'pendente' %}
+                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#aceitarModal{{ troca.id }}">
+                                    <i class="bi bi-check-lg"></i> Aceitar
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejeitarModal{{ troca.id }}">
+                                    <i class="bi bi-x-lg"></i> Rejeitar
+                                </button>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            {% elif troca.militar_entra_2 == militar_logado %}
+                                {% if troca.aprovada_militar_entra_2 %}
+                                <span class="text-success"><i class="bi bi-check-circle-fill"></i> Aprovado</span>
+                                {% elif troca.aprovada_militar_entra_2 == False %}
+                                <span class="text-danger"><i class="bi bi-x-circle-fill"></i> Recusado</span>
+                                {% elif troca.status == 'pendente' %}
+                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#aceitarModal{{ troca.id }}">
+                                    <i class="bi bi-check-lg"></i> Aceitar
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#rejeitarModal{{ troca.id }}">
+                                    <i class="bi bi-x-lg"></i> Rejeitar
+                                </button>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if troca.status == 'pendente' %}
+                            <span class="badge bg-warning">Pendente</span>
+                            {% elif troca.status == 'aprovada' %}
+                            <span class="badge bg-success">Aprovada</span>
+                            {% elif troca.status == 'reprovada' %}
+                            <span class="badge bg-danger">Reprovada</span>
+                            {% elif troca.status == 'homologada' %}
+                            <span class="badge bg-primary">Homologada</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <a href="{% url 'troca_detalhar' troca.id %}" class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+
+                    <!-- Modal Aceitar -->
+                    <div class="modal fade" id="aceitarModal{{ troca.id }}" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Aceitar Troca {{ troca.numero_controle }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form method="post" action="{% url 'troca_aceitar' troca.id %}">
+                                    {% csrf_token %}
+                                    <div class="modal-body">
+                                        <p>Tem certeza que deseja aceitar esta troca?</p>
+                                        <input type="hidden" name="acao" value="aceitar">
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-success">Aceitar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Modal Rejeitar -->
+                    <div class="modal fade" id="rejeitarModal{{ troca.id }}" tabindex="-1">
+                        <div class="modal-dialog">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title">Rejeitar Troca {{ troca.numero_controle }}</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                </div>
+                                <form method="post" action="{% url 'troca_aceitar' troca.id %}">
+                                    {% csrf_token %}
+                                    <div class="modal-body">
+                                        <p>Tem certeza que deseja rejeitar esta troca?</p>
+                                        <input type="hidden" name="acao" value="rejeitar">
+                                    </div>
+                                    <div class="modal-footer">
+                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                        <button type="submit" class="btn btn-danger">Rejeitar</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

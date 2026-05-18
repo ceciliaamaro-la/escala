@@ -1,0 +1,171 @@
+{% extends 'base.html' %}
+{% load escala_filters %}
+
+{% block titulo %}Homologar Trocas - Sistema de Escala{% endblock %}
+
+{% block conteudo %}
+<div class="row">
+    <div class="col-12">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2><i class="bi bi-arrow-left-right"></i> Homologar Trocas de Serviço</h2>
+            <div>
+                <span class="badge bg-secondary fs-6">
+                    Total este mês: {{ trocas_mes }}
+                </span>
+            </div>
+        </div>
+
+        <div class="alert alert-info mb-3">
+            <i class="bi bi-info-circle"></i>
+            Apenas trocas de escalas <strong>publicadas</strong> precisam de homologação.
+            Trocas de previsão são aprovadas apenas pelo Escalante.
+        </div>
+
+        {% if not trocas %}
+        <div class="alert alert-secondary text-center">
+            <i class="bi bi-inbox"></i>
+            Nenhuma troca aguardando homologação.
+        </div>
+        {% else %}
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>Nº Controle</th>
+                        <th>Tipo</th>
+                        <th>Escala</th>
+                        <th>Sai</th>
+                        <th>Data</th>
+                        <th>Entra</th>
+                        <th>Escalante</th>
+                        <th>Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for troca in trocas %}
+                    <tr>
+                        <td><strong>{{ troca.numero_controle }}</strong></td>
+                        <td>
+                            {% if troca.tipo_troca == 'mutua' %}
+                            <span class="badge bg-warning text-dark">Mútua</span>
+                            {% else %}
+                            <span class="badge bg-secondary">Simples</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ troca.tipo_escala.nome }}</td>
+                        <td>{{ troca.militar_sai.nome_guerra }}</td>
+                        <td>{{ troca.data_servico_sai|date:"d/m" }}</td>
+                        <td>
+                            {% if troca.militar_entra %}
+                            {{ troca.militar_entra.nome_guerra }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if troca.usuario_escalante %}
+                            {{ troca.usuario_escalante.get_full_name|default:troca.usuario_escalante.username }}
+                            {% else %}
+                            <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <div class="btn-group" role="group">
+                                <a href="{% url 'troca_detalhar' troca.id %}" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                                <button type="button" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#homologarModal{{ troca.id }}" title="Homologar">
+                                    <i class="bi bi-check-lg"></i>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-danger" data-bs-toggle="modal" data-bs-target="#reprovarModal{{ troca.id }}" title="Reprovar">
+                                    <i class="bi bi-x-lg"></i>
+                                </button>
+                            </div>
+
+                            <!-- Modal Homologar -->
+                            <div class="modal fade" id="homologarModal{{ troca.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Homologar Troca {{ troca.numero_controle }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="post" action="{% url 'troca_homologar' troca.id %}">
+                                            {% csrf_token %}
+                                            <div class="modal-body">
+                                                <p>Esta ação irá realizar a troca na escala publicada.</p>
+                                                <div class="mb-3">
+                                                    <label class="form-label">Observação (opcional)</label>
+                                                    <textarea name="observacao" class="form-control" rows="3" placeholder="Observações sobre a homologação..."></textarea>
+                                                </div>
+                                                <input type="hidden" name="acao" value="homologar">
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-success">Homologar</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Modal Reprovar -->
+                            <div class="modal fade" id="reprovarModal{{ troca.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Reprovar Troca {{ troca.numero_controle }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="post" action="{% url 'troca_homologar' troca.id %}">
+                                            {% csrf_token %}
+                                            <div class="modal-body">
+                                                <div class="mb-3">
+                                                    <label class="form-label">Motivo da reprovação</label>
+                                                    <textarea name="observacao" class="form-control" rows="3" required placeholder="Informe o motivo da reprovação..."></textarea>
+                                                </div>
+                                                <input type="hidden" name="acao" value="reprovar">
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                                                <button type="submit" class="btn btn-danger">Reprovar</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Paginação -->
+        {% if total_paginas > 1 %}
+        <nav aria-label="Paginação">
+            <ul class="pagination justify-content-center">
+                {% if pagina > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="?pagina={{ pagina|add:'-1' }}">Anterior</a>
+                </li>
+                {% endif %}
+
+                {% for p in total_paginas|range_filter %}
+                <li class="page-item {% if p == pagina %}active{% endif %}">
+                    <a class="page-link" href="?pagina={{ p }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+
+                {% if pagina < total_paginas %}
+                <li class="page-item">
+                    <a class="page-link" href="?pagina={{ pagina|add:'1' }}">Próxima</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% endif %}
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
