@@ -434,6 +434,17 @@ class Militar(models.Model):
         )
     )
 
+    # Username LDAP (sAMAccountName) — usado para autenticação via Active Directory
+    username_ldap = models.CharField(
+        max_length=64,
+        blank=True,
+        default='',
+        help_text=(
+            "Username de rede (sAMAccountName) para login via LDAP/Active Directory. "
+            "Deve ser igual ao username cadastrado em UsuarioCustomizado."
+        )
+    )
+
     # Vínculo com usuário do sistema (login próprio do militar)
     user = models.OneToOneField(
         'escalas.UsuarioCustomizado',

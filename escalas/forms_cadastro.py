@@ -143,6 +143,7 @@ class MilitarForm(BootstrapFormMixin, forms.ModelForm):
             'nome_guerra', 'nome_completo',
             'cpf', 'matricula', 'data_nascimento',
             'data_ultima_promocao',
+            'username_ldap',
             'ativo',
         ]
         widgets = {
@@ -150,9 +151,11 @@ class MilitarForm(BootstrapFormMixin, forms.ModelForm):
             'data_ultima_promocao': forms.DateInput(attrs={'type': 'date'}),
             'cpf': forms.TextInput(attrs={'placeholder': 'somente números (11 dígitos)'}),
             'nome_guerra': forms.TextInput(attrs={'placeholder': 'Ex: SILVA'}),
+            'username_ldap': forms.TextInput(attrs={'placeholder': 'Ex: nome.sobrenome'}),
         }
         labels = {
             'data_ultima_promocao': 'Última promoção',
+            'username_ldap': 'Username de rede (LDAP)',
         }
 
     def __init__(self, *args, om=None, **kwargs):

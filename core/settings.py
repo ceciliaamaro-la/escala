@@ -142,3 +142,50 @@ MEDIA_ROOT = BASE_DIR / 'media'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ===========================================================================
+# AUTENTICAÇÃO LDAP / ACTIVE DIRECTORY
+# ===========================================================================
+# Para habilitar o login via LDAP:
+#   1. Instale: pip install django-auth-ldap
+#   2. Descomente as configurações abaixo e ajuste os valores
+#   3. O backend CustomLDAPBackend (core/backend.py) garante que apenas
+#      usuários previamente cadastrados no sistema consigam autenticar via LDAP
+#
+# Fluxo de autenticação:
+#   - Login → CustomLDAPBackend verifica se username existe localmente
+#   - Se existir: autentica via LDAP (valida senha no AD)
+#   - Se não existir: ModelBackend tenta senha local (fallback)
+# ===========================================================================
+
+# import ldap
+# from django_auth_ldap.config import LDAPSearch
+
+# AUTH_LDAP_SERVER_URI = "ldap://10.100.0.1:389"
+# AUTH_LDAP_BIND_DN = "cn=django,ou=XXXX,dc=xxxx,dc=dddd"
+# AUTH_LDAP_BIND_PASSWORD = "XXXXXXXXXXXXX"
+
+# AUTH_LDAP_USER_SEARCH = LDAPSearch(
+#     "ou=XXXX,dc=xxxx,dc=dddd",
+#     ldap.SCOPE_SUBTREE,
+#     "(sAMAccountName=%(user)s)",   # Active Directory
+#     # "(uid=%(user)s)",            # OpenLDAP / alternativa
+# )
+
+# AUTH_LDAP_USER_ATTR_MAP = {
+#     "username":   "sAMAccountName",
+#     "first_name": "name",
+#     "last_name":  "physicalDeliveryOfficeName",
+#     "email":      "mail",
+# }
+
+# Backends ativos quando LDAP estiver habilitado:
+# AUTHENTICATION_BACKENDS = [
+#     "core.backend.CustomLDAPBackend",   # LDAP primeiro (requer usuário local)
+#     "django.contrib.auth.backends.ModelBackend",  # fallback senha local
+# ]
+
+# Configurações opcionais do django-auth-ldap:
+# AUTH_LDAP_ALWAYS_UPDATE_USER = True   # Sincroniza atributos do AD a cada login
+# AUTH_LDAP_CACHE_TIMEOUT = 3600        # Cache de grupo em segundos

@@ -73,6 +73,17 @@
                         {{ form.divisao }}
                         {% for e in form.divisao.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                     </div>
+                    <div class="mb-3">
+                        <label class="form-label" for="{{ form.username_ldap.id_for_label }}">
+                            <i class="bi bi-person-badge"></i> {{ form.username_ldap.label }}
+                        </label>
+                        {{ form.username_ldap }}
+                        {% for e in form.username_ldap.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        <div class="form-text text-muted">
+                            Username de rede (sAMAccountName) para login via LDAP/Active Directory.
+                            Deve ser igual ao <strong>username</strong> cadastrado no usuário do sistema.
+                        </div>
+                    </div>
                     <div class="form-check mt-3">
                         {{ form.ativo }}
                         <label class="form-check-label" for="{{ form.ativo.id_for_label }}">{{ form.ativo.label }}</label>
