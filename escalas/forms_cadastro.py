@@ -143,6 +143,7 @@ class MilitarForm(BootstrapFormMixin, forms.ModelForm):
             'nome_guerra', 'nome_completo',
             'cpf', 'matricula', 'data_nascimento',
             'data_ultima_promocao',
+            'tipos_escala',
             'username_ldap',
             'ativo',
         ]
@@ -152,10 +153,12 @@ class MilitarForm(BootstrapFormMixin, forms.ModelForm):
             'cpf': forms.TextInput(attrs={'placeholder': 'somente números (11 dígitos)'}),
             'nome_guerra': forms.TextInput(attrs={'placeholder': 'Ex: SILVA'}),
             'username_ldap': forms.TextInput(attrs={'placeholder': 'Ex: nome.sobrenome'}),
+            'tipos_escala': forms.CheckboxSelectMultiple(),
         }
         labels = {
             'data_ultima_promocao': 'Última promoção',
             'username_ldap': 'Username de rede (LDAP)',
+            'tipos_escala': 'Participa das escalas',
         }
 
     def __init__(self, *args, om=None, **kwargs):
@@ -169,6 +172,9 @@ class MilitarForm(BootstrapFormMixin, forms.ModelForm):
         ).order_by('nome')
         self.fields['especialidade'].required = False
         self.fields['divisao'].required = False
+        self.fields['tipos_escala'].required = False
+        from .models import TipoEscala
+        self.fields['tipos_escala'].queryset = TipoEscala.objects.filter(ativo=True).order_by('nome')
         if om is not None:
             self.fields['divisao'].queryset = Divisao.objects.filter(
                 organizacao_militar=om, ativo=True

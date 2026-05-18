@@ -1155,6 +1155,23 @@ def militar_form(request, militar_id=None):
             militar = form.save(commit=False)
             militar.organizacao_militar = om
             militar.save()
+            form.save_m2m()  # salva tipos_escala
+
+            # Criar usuário automaticamente se ainda não tem um
+            if not militar.user_id:
+                try:
+                    usuario = militar.criar_usuario_automatico()
+                    messages.info(
+                        request,
+                        f'Usuário <strong>{usuario.username}</strong> criado automaticamente. '
+                        f'Senha inicial: matrícula ({militar.matricula}).',
+                    )
+                except Exception as exc:
+                    messages.warning(
+                        request,
+                        f'Militar salvo, mas não foi possível criar o usuário automático: {exc}',
+                    )
+
             messages.success(
                 request,
                 f'Militar {militar.nome_guerra} salvo com sucesso.',
@@ -2112,26 +2129,61 @@ def matriz_publica(request, slug):
 
 @login_required
 def usuario_listar(request):
+    """Lista todos os militares (que são usuários) + usuários sem militar vinculado."""
+    om = obter_om_ativa(request)
     q = request.GET.get('q', '').strip()
     perfil_filtro = request.GET.get('perfil', '')
+    tipo_escala_filtro = request.GET.get('tipo_escala', '')
 
-    qs = UsuarioCustomizado.objects.select_related('om_principal').order_by('username')
+    # Base: militares ativos da OM, ordenados por antiguidade
+    militares_qs = Militar.objects.filter(ativo=True)
+    if om:
+        militares_qs = militares_qs.filter(organizacao_militar=om)
+    militares_qs = militares_qs.select_related(
+        'posto', 'user', 'organizacao_militar'
+    ).prefetch_related('tipos_escala').order_by(
+        'posto__ordem_hierarquica', 'data_ultima_promocao', 'nome_guerra'
+    )
 
     if q:
-        qs = qs.filter(
+        militares_qs = militares_qs.filter(
+            Q(nome_guerra__icontains=q) |
+            Q(nome_completo__icontains=q) |
+            Q(matricula__icontains=q) |
+            Q(user__username__icontains=q)
+        )
+
+    if tipo_escala_filtro:
+        militares_qs = militares_qs.filter(tipos_escala__id=tipo_escala_filtro)
+
+    if perfil_filtro:
+        # Filtra militares cujo user tem o perfil selecionado
+        militares_qs = militares_qs.filter(user__perfil=perfil_filtro)
+
+    # Usuários sem militar vinculado (admins, escalantes criados manualmente)
+    usuarios_sem_militar = UsuarioCustomizado.objects.filter(
+        militar__isnull=True
+    ).select_related('om_principal').order_by('username')
+    if q:
+        usuarios_sem_militar = usuarios_sem_militar.filter(
             Q(username__icontains=q) |
             Q(first_name__icontains=q) |
             Q(last_name__icontains=q)
         )
-
     if perfil_filtro:
-        qs = qs.filter(perfil=perfil_filtro)
+        usuarios_sem_militar = usuarios_sem_militar.filter(perfil=perfil_filtro)
+
+    tipos_escala = TipoEscala.objects.filter(ativo=True).order_by('nome')
 
     return render(request, 'cadastro/usuario_list.html', {
-        'usuarios': qs,
-        'q': q,
-        'perfil_filtro': perfil_filtro,
-        'perfis': PerfilUsuario.choices,
+        'militares':            militares_qs,
+        'usuarios_sem_militar': usuarios_sem_militar,
+        'q':                    q,
+        'perfil_filtro':        perfil_filtro,
+        'tipo_escala_filtro':   tipo_escala_filtro,
+        'perfis':               PerfilUsuario.choices,
+        'tipos_escala':         tipos_escala,
+        'om':                   om,
     })
 
 

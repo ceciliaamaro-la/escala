@@ -73,18 +73,52 @@
                         {{ form.divisao }}
                         {% for e in form.divisao.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                     </div>
+                    <!-- Tipos de escala -->
+                    <div class="mb-3">
+                        <label class="form-label">
+                            <i class="bi bi-calendar2-check"></i> {{ form.tipos_escala.label }}
+                        </label>
+                        <div class="border rounded p-2">
+                            {% for checkbox in form.tipos_escala %}
+                            <div class="form-check">
+                                {{ checkbox.tag }}
+                                <label class="form-check-label" for="{{ checkbox.id_for_label }}">{{ checkbox.choice_label }}</label>
+                            </div>
+                            {% empty %}
+                            <span class="text-muted small">Nenhum tipo de escala cadastrado.</span>
+                            {% endfor %}
+                        </div>
+                        {% for e in form.tipos_escala.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
+                        <div class="form-text text-muted">Selecione as escalas nas quais este militar participa. Se nenhuma for selecionada, ele não será incluído na geração automática.</div>
+                    </div>
+
+                    <!-- Username LDAP -->
                     <div class="mb-3">
                         <label class="form-label" for="{{ form.username_ldap.id_for_label }}">
                             <i class="bi bi-person-badge"></i> {{ form.username_ldap.label }}
                         </label>
+                        {% if not militar %}
+                        <div class="alert alert-info py-1 px-2 small mb-1">
+                            <i class="bi bi-info-circle"></i>
+                            O username será gerado automaticamente ao salvar (formato: <code>nomeguerra_iniciais</code>).
+                        </div>
+                        {% endif %}
                         {{ form.username_ldap }}
                         {% for e in form.username_ldap.errors %}<div class="text-danger small">{{ e }}</div>{% endfor %}
                         <div class="form-text text-muted">
-                            Username de rede (sAMAccountName) para login via LDAP/Active Directory.
-                            Deve ser igual ao <strong>username</strong> cadastrado no usuário do sistema.
+                            Preenchido automaticamente. Altere apenas se o login de rede (sAMAccountName) for diferente.
                         </div>
                     </div>
-                    <div class="form-check mt-3">
+                    {% if militar and militar.user %}
+                    <div class="alert alert-secondary py-2 small">
+                        <i class="bi bi-person-check"></i>
+                        Usuário vinculado: <strong><code>{{ militar.user.username }}</code></strong>
+                        ({{ militar.user.get_perfil_display }})
+                        — <a href="{% url 'usuario_editar' militar.user.id %}">Editar perfil de acesso</a>
+                    </div>
+                    {% endif %}
+
+                    <div class="form-check mt-2">
                         {{ form.ativo }}
                         <label class="form-check-label" for="{{ form.ativo.id_for_label }}">{{ form.ativo.label }}</label>
                     </div>

@@ -445,6 +445,18 @@ class Militar(models.Model):
         )
     )
 
+    # Tipos de escala nos quais o militar participa (M2M opcional)
+    tipos_escala = models.ManyToManyField(
+        'TipoEscala',
+        blank=True,
+        related_name='militares_participantes',
+        help_text=(
+            "Tipos de escala nos quais este militar participa. "
+            "Apenas militares vinculados a um tipo de escala serão considerados "
+            "na geração automática daquele tipo."
+        )
+    )
+
     # Vínculo com usuário do sistema (login próprio do militar)
     user = models.OneToOneField(
         'escalas.UsuarioCustomizado',
@@ -474,6 +486,75 @@ class Militar(models.Model):
             models.Index(fields=['cpf']),
         ]
     
+    @staticmethod
+    def gerar_username(nome_guerra: str, matricula: str) -> str:
+        """
+        Gera username no padrão: <nome_guerra_lower>_<iniciais_matricula>
+        Ex: 'SILVA SANTOS' + '123456' → 'silva_ss'
+        Ex: 'COSTA'        + '789012' → 'costa_789012'  (sem iniciais → usa matrícula)
+
+        Regras:
+          - nome_guerra em minúsculas, sem acentos, sem espaços extras
+          - iniciais = primeira letra de cada palavra do nome (sem a primeira,
+            pois ela já está no nome base)
+          - se nome tiver só uma palavra, usa os 6 primeiros dígitos da matrícula
+          - caracteres especiais removidos via slugify
+        """
+        from django.utils.text import slugify
+
+        partes = nome_guerra.strip().split()
+        base = slugify(partes[0]).replace('-', '')
+
+        if len(partes) > 1:
+            iniciais = ''.join(p[0].lower() for p in partes[1:] if p)
+            sufixo = slugify(iniciais).replace('-', '') or matricula[:6]
+        else:
+            sufixo = matricula[:6]
+
+        return f"{base}_{sufixo}"
+
+    def criar_usuario_automatico(self) -> 'UsuarioCustomizado':
+        """
+        Cria (ou retorna existente) um UsuarioCustomizado vinculado a este militar.
+
+        - username: gerado por gerar_username()
+        - senha inicial: matrícula (substituída no login real pelo LDAP)
+        - perfil: 'militar'
+        - om_principal: OM do militar
+        - first_name / last_name: extraídos do nome_completo
+        """
+        if self.user_id:
+            return self.user
+
+        username = Militar.gerar_username(self.nome_guerra, self.matricula)
+
+        # Garante unicidade: se já existe, adiciona sufixo numérico
+        base_username = username
+        contador = 1
+        while UsuarioCustomizado.objects.filter(username=username).exists():
+            username = f"{base_username}{contador}"
+            contador += 1
+
+        partes_nome = self.nome_completo.strip().split()
+        first_name = partes_nome[0] if partes_nome else ''
+        last_name = ' '.join(partes_nome[1:]) if len(partes_nome) > 1 else ''
+
+        usuario = UsuarioCustomizado.objects.create_user(
+            username=username,
+            password=self.matricula,
+            first_name=first_name,
+            last_name=last_name,
+            perfil=PerfilUsuario.MILITAR,
+            om_principal=self.organizacao_militar,
+        )
+
+        self.user = usuario
+        if self.username_ldap == '':
+            self.username_ldap = username
+        Militar.objects.filter(pk=self.pk).update(user=usuario, username_ldap=self.username_ldap)
+
+        return usuario
+
     def __str__(self):
         return f"{self.nome_guerra} ({self.posto.sigla})"
     
