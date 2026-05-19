@@ -922,35 +922,37 @@ def quadrinho_visao(request):
         for ts in tipos_servico:
             bloco = por_ts.get(ts.id)
             if not bloco:
-                # Sem registros neste tipo — inclui seção vazia para consistência
                 matriz_secoes.append({
                     'tipo_servico': ts,
-                    'datas': [],
-                    'linhas': [{'militar': m, 'datas_set': set(), 'total': 0}
+                    'max_servicos': 0,
+                    'colunas': [],
+                    'linhas': [{'militar': m, 'datas': [], 'total': 0}
                                for m in militares_antiguidade],
                     'total_geral': 0,
                 })
                 continue
 
-            # Datas únicas ordenadas = cabeçalho das colunas
-            datas_unicas = sorted({
-                d for registros in bloco['por_militar'].values() for d in registros
-            })
-
+            # Cada militar tem suas datas em ordem cronológica
             linhas_ts = []
             total_geral_ts = 0
+            max_servicos = 0
             for m in militares_antiguidade:
-                datas_mil = set(bloco['por_militar'].get(m.id, []))
+                datas_mil = sorted(bloco['por_militar'].get(m.id, []))
                 total_geral_ts += len(datas_mil)
+                max_servicos = max(max_servicos, len(datas_mil))
                 linhas_ts.append({
                     'militar': m,
-                    'datas_set': datas_mil,
+                    'datas': datas_mil,
                     'total': len(datas_mil),
                 })
 
+            # Cabeçalho: 1º, 2º, 3º… N-ésimo serviço
+            colunas = list(range(1, max_servicos + 1))
+
             matriz_secoes.append({
                 'tipo_servico': ts,
-                'datas': datas_unicas,
+                'max_servicos': max_servicos,
+                'colunas': colunas,
                 'linhas': linhas_ts,
                 'total_geral': total_geral_ts,
             })
