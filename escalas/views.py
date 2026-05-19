@@ -585,11 +585,20 @@ def militar_listar(request):
 
     anos_opcoes = list(range(ano_atual + 1, ano_atual - 5, -1))
 
+    # Militares inativos (soft-delete) — sem filtros de busca
+    militares_inativos = (
+        Militar.objects.filter(organizacao_militar=om, ativo=False)
+        .select_related('posto', 'divisao', 'especialidade')
+        .order_by('-posto__ordem_hierarquica', 'nome_guerra')
+        if om else Militar.objects.none()
+    )
+
     return render(
         request,
         'cadastro/militar_list.html',
         {
             'militares_lista': militares_lista,
+            'militares_inativos': militares_inativos,
             'tipos_servico': tipos_servico,
             'tipos_escala': tipos_escala,
             'tipo_escala_atual': tipo_escala_atual,

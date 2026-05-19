@@ -151,4 +151,67 @@
     </table>
     </div>
 </div>
+
+{% if militares_inativos %}
+<div class="mt-4">
+    <button class="btn btn-mil-outline btn-sm mb-2" type="button"
+            data-bs-toggle="collapse" data-bs-target="#tabela-inativos"
+            aria-expanded="false" aria-controls="tabela-inativos">
+        <i class="bi bi-archive"></i>
+        Militares desativados ({{ militares_inativos|length }})
+        <i class="bi bi-chevron-down ms-1" id="chevron-inativos"></i>
+    </button>
+
+    <div class="collapse" id="tabela-inativos">
+        <div class="card-mil" style="opacity:.85;">
+            <div class="table-responsive">
+            <table class="table table-mil mb-0 align-middle">
+                <thead>
+                    <tr>
+                        <th></th>
+                        <th>Militar</th>
+                        <th class="d-none d-lg-table-cell">Nome completo</th>
+                        <th style="width:110px;" class="d-none d-md-table-cell">Matrícula</th>
+                        <th style="width:80px;" class="d-none d-md-table-cell">Divisão</th>
+                        <th style="width:105px;" class="d-none d-xl-table-cell">Ult. Promoção</th>
+                        <th class="text-end" style="width:140px;">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for m in militares_inativos %}
+                    <tr class="text-muted">
+                        <td></td>
+                        <td><span style="text-decoration:line-through;">{{ m|posto_nome }}</span></td>
+                        <td class="d-none d-lg-table-cell small">{{ m.nome_completo }}</td>
+                        <td class="d-none d-md-table-cell"><code class="text-muted">{{ m.matricula }}</code></td>
+                        <td class="d-none d-md-table-cell">{{ m.divisao.sigla|default:"—" }}</td>
+                        <td class="d-none d-xl-table-cell small">
+                            {% if m.data_ultima_promocao %}{{ m.data_ultima_promocao|date:"d/m/Y" }}{% else %}—{% endif %}
+                        </td>
+                        <td class="text-end text-nowrap">
+                            <a href="{% url 'militar_detalhe' m.id %}?ano={{ ano }}" class="btn btn-sm btn-mil-outline" title="Ver histórico">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <a href="{% url 'militar_editar' m.id %}" class="btn btn-sm btn-mil-outline" title="Reativar / Editar">
+                                <i class="bi bi-arrow-counterclockwise"></i>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.getElementById('tabela-inativos')?.addEventListener('show.bs.collapse', () => {
+    document.getElementById('chevron-inativos')?.classList.replace('bi-chevron-down','bi-chevron-up');
+});
+document.getElementById('tabela-inativos')?.addEventListener('hide.bs.collapse', () => {
+    document.getElementById('chevron-inativos')?.classList.replace('bi-chevron-up','bi-chevron-down');
+});
+</script>
+{% endif %}
 {% endblock %}
