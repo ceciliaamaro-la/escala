@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block titulo %}Sistema de Escala FAB{% endblock %}</title>
+    <title>{% block titulo %}Sistema de Escala{% endblock %}</title>
     <link rel="stylesheet" href="{% static 'css/bootstrap.min.css' %}">
     <link rel="stylesheet" href="{% static 'css/bootstrap-icons.css' %}">
     <link rel="stylesheet" href="{% static 'css/cinzel.css' %}">
@@ -13,6 +13,7 @@
     {% if user.is_authenticated %}
     <nav class="navbar navbar-expand-lg navbar-mil">
         <div class="container-fluid px-3 px-lg-4">
+
             <a class="navbar-brand d-flex align-items-center gap-2" href="{% url 'dashboard' %}">
                 {% if om_ativa and om_ativa.logo %}
                     <span class="crest crest-img" title="{{ om_ativa.sigla }}">
@@ -25,102 +26,176 @@
                 {% endif %}
                 <span class="brand-title">Escalas</span>
             </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav">
+
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#mainNav"
+                    aria-controls="mainNav" aria-expanded="false" aria-label="Menu">
                 <span class="navbar-toggler-icon"></span>
             </button>
+
             <div class="collapse navbar-collapse" id="mainNav">
-                <ul class="navbar-nav me-auto">
+                <ul class="navbar-nav me-auto align-items-lg-center">
+
                     {% if not militar_do_usuario %}
+                    {# ---- Painel ---- #}
                     <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+                           href="{% url 'dashboard' %}">
                             <i class="bi bi-speedometer2"></i> Painel
                         </a>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'militar' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'militar_listar' %}">
-                            <i class="bi bi-people-fill"></i> Militares
+
+                    {# ---- Cadastros dropdown ---- #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle nav-dropdown-toggle
+                            {% if request.resolver_match.url_name in 'militar_listar,militar_novo,militar_editar,militar_detalhar,divisao_listar,divisao_novo,divisao_editar,posto_listar,posto_novo,posto_editar,especialidade_listar,especialidade_novo,especialidade_editar,tipo_escala_listar,tipo_escala_novo,tipo_escala_editar' %}active{% endif %}"
+                           href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-people-fill"></i> Cadastros
                         </a>
+                        <ul class="dropdown-menu dropdown-menu-mil">
+                            <li>
+                                <a class="dropdown-item {% if 'militar' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'militar_listar' %}">
+                                    <i class="bi bi-people-fill"></i> Militares
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if 'divisao' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'divisao_listar' %}">
+                                    <i class="bi bi-diagram-3"></i> Divisões
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if 'posto' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'posto_listar' %}">
+                                    <i class="bi bi-stars"></i> Postos
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if 'especialidade' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'especialidade_listar' %}">
+                                    <i class="bi bi-award"></i> Especialidades
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item {% if 'tipo_escala' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'tipo_escala_listar' %}">
+                                    <i class="bi bi-layers"></i> Tipos de Escala
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if 'tipo_indisponibilidade' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'tipo_indisponibilidade_listar' %}">
+                                    <i class="bi bi-tags"></i> Tipos de Indisp.
+                                </a>
+                            </li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'divisao' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'divisao_listar' %}">
-                            <i class="bi bi-diagram-3"></i> Divisões
+
+                    {# ---- Escalas dropdown ---- #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle nav-dropdown-toggle
+                            {% if 'escala' in request.resolver_match.url_name or 'quadrinho' in request.resolver_match.url_name or 'lancamento' in request.resolver_match.url_name or request.resolver_match.url_name == 'configuracao_escala' %}active{% endif %}"
+                           href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-calendar2-week"></i> Escalas
                         </a>
+                        <ul class="dropdown-menu dropdown-menu-mil">
+                            <li>
+                                <a class="dropdown-item {% if 'escala' in request.resolver_match.url_name and request.resolver_match.url_name != 'configuracao_escala' and 'indisponibilidade' not in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'escala_listar' %}">
+                                    <i class="bi bi-calendar2-week"></i> Escalas
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if 'quadrinho' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'quadrinho_visao' %}">
+                                    <i class="bi bi-grid-3x3-gap"></i> Quadrinho
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if 'lancamento' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'lancamento_manual_listar' %}">
+                                    <i class="bi bi-pencil-square"></i> Lançamentos
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item {% if request.resolver_match.url_name == 'configuracao_escala' %}active{% endif %}"
+                                   href="{% url 'configuracao_escala' %}">
+                                    <i class="bi bi-sliders"></i> Configurações
+                                </a>
+                            </li>
+                        </ul>
                     </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'posto' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'posto_listar' %}">
-                            <i class="bi bi-stars"></i> Postos
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'especialidade' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'especialidade_listar' %}">
-                            <i class="bi bi-award"></i> Especialidades
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'tipo_escala' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'tipo_escala_listar' %}">
-                            <i class="bi bi-layers"></i> Tipos de Escala
-                        </a>
-                    </li>
-                    {% endif %}
+
+                    {# ---- Indisponibilidades ---- #}
                     <li class="nav-item">
                         <a class="nav-link {% if 'indisponibilidade' in request.resolver_match.url_name %}active{% endif %}"
                            href="{% url 'indisponibilidade_listar' %}">
-                            <i class="bi bi-calendar-x"></i>
-                            {% if militar_do_usuario %}Minha Indisponib.{% else %}Indisponibilidades{% endif %}
+                            <i class="bi bi-calendar-x"></i> Indisponib.
                         </a>
                     </li>
-                    {% if not militar_do_usuario %}
+
+                    {# ---- Admin dropdown ---- #}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle nav-dropdown-toggle
+                            {% if 'organizacao' in request.resolver_match.url_name or 'usuario' in request.resolver_match.url_name %}active{% endif %}"
+                           href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-gear"></i> Admin
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-mil dropdown-menu-end">
+                            <li>
+                                <a class="dropdown-item {% if 'organizacao' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'organizacao_listar' %}">
+                                    <i class="bi bi-buildings"></i> OMs
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item {% if 'usuario' in request.resolver_match.url_name %}active{% endif %}"
+                                   href="{% url 'usuario_listar' %}">
+                                    <i class="bi bi-people"></i> Usuários
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+
+                    {% else %}
+                    {# ---- Militar vinculado: menu reduzido ---- #}
                     <li class="nav-item">
-                        <a class="nav-link {% if 'tipo_indisponibilidade' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'tipo_indisponibilidade_listar' %}">
-                            <i class="bi bi-tags"></i> Tipos Indisp.
+                        <a class="nav-link {% if 'indisponibilidade' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'indisponibilidade_listar' %}">
+                            <i class="bi bi-calendar-x"></i> Minha Indisponib.
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {% if 'escala' in request.resolver_match.url_name and request.resolver_match.url_name != 'configuracao_escala' %}active{% endif %}" href="{% url 'escala_listar' %}">
-                            <i class="bi bi-calendar2-week"></i> Escalas
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'configuracao_escala' %}active{% endif %}" href="{% url 'configuracao_escala' %}">
-                            <i class="bi bi-sliders"></i> Configurações
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'organizacao' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'organizacao_listar' %}">
-                            <i class="bi bi-buildings"></i> OMs
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'usuario' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'usuario_listar' %}">
-                            <i class="bi bi-people"></i> Usuários
-                        </a>
-                    </li>
-                    {% endif %}
-                    <li class="nav-item">
-                        <a class="nav-link {% if 'quadrinho' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'quadrinho_visao' %}">
+                        <a class="nav-link {% if 'quadrinho' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'quadrinho_visao' %}">
                             <i class="bi bi-grid-3x3-gap"></i> Quadrinho
                         </a>
                     </li>
+                    {% endif %}
+
+                    {# ---- Público: Sobreaviso ---- #}
                     <li class="nav-item">
-                        <a class="nav-link {% if 'lancamento_manual' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'lancamento_manual_listar' %}">
-                            <i class="bi bi-pencil-square"></i> Lançamentos
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link {% if request.resolver_match.url_name == 'sobreaviso_publico' %}active{% endif %}" href="{% url 'sobreaviso_publico' %}">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'sobreaviso_publico' %}active{% endif %}"
+                           href="{% url 'sobreaviso_publico' %}">
                             <i class="bi bi-broadcast"></i> Sobreaviso
                         </a>
                     </li>
+
+                    {# ---- Troca (todos os perfis) ---- #}
                     {% if user.perfil == 'militar' or user.perfil == 'escalante' or user.perfil == 'chefe' or user.perfil == 'adjunto' or user.perfil == 'admin_om' %}
                     <li class="nav-item">
-                        <a class="nav-link {% if 'troca' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'troca_listar' %}">
+                        <a class="nav-link {% if 'troca' in request.resolver_match.url_name %}active{% endif %}"
+                           href="{% url 'troca_listar' %}">
                             <i class="bi bi-arrow-left-right"></i> Troca
                         </a>
                     </li>
                     {% endif %}
+
                 </ul>
 
-                <div class="d-flex align-items-center gap-2">
+                <div class="d-flex align-items-center gap-2 mt-2 mt-lg-0">
                     {# OM SWITCHER #}
                     {% if oms_disponiveis %}
                     <div class="dropdown om-switcher">
@@ -207,7 +282,7 @@
     {% if user.is_authenticated %}
     <footer class="footer-mil">
         <div class="container d-flex justify-content-between flex-wrap gap-2">
-            <span><i class="bi bi-airplane"></i> Sistema de Escala FAB &middot; v1.0</span>
+            <span><i class="bi bi-airplane"></i> Sistema de Escala &middot; v1.0</span>
             <span><i class="bi bi-shield-check"></i> Acesso restrito</span>
         </div>
     </footer>

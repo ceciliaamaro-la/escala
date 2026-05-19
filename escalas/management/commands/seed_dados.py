@@ -24,23 +24,23 @@ from escalas.models import (
 
 # Hierarquia de postos da Força Aérea Brasileira
 POSTOS_FAB = [
-    ('Soldado de 2ª Classe', 'S2', 1),
-    ('Soldado de 1ª Classe', 'S1', 2),
-    ('Cabo', 'Cb', 3),
-    ('3º Sargento', '3º Sgt', 4),
-    ('2º Sargento', '2º Sgt', 5),
-    ('1º Sargento', '1º Sgt', 6),
-    ('Suboficial', 'SO', 7),
-    ('Aspirante a Oficial', 'Asp', 8),
+    ('Tenente-Brigadeiro', 'TenBrig', 1),
+    ('Major-Brigadeiro', 'MajBrig', 2),
+    ('Brigadeiro', 'Brig', 3),
+    ('Coronel', 'Cel', 4),
+    ('Tenente-Coronel', 'TC', 5),
+    ('Major', 'Maj', 6),
+    ('Capitão', 'Cap', 7),
+    ('1º Tenente', '1º Ten', 8),
     ('2º Tenente', '2º Ten', 9),
-    ('1º Tenente', '1º Ten', 10),
-    ('Capitão', 'Cap', 11),
-    ('Major', 'Maj', 12),
-    ('Tenente-Coronel', 'TC', 13),
-    ('Coronel', 'Cel', 14),
-    ('Brigadeiro', 'Brig', 15),
-    ('Major-Brigadeiro', 'MajBrig', 16),
-    ('Tenente-Brigadeiro', 'TenBrig', 17),
+    ('Aspirante a Oficial', 'Asp', 10),
+    ('Suboficial', 'SO', 11),
+    ('1º Sargento', '1º Sgt', 12),
+    ('2º Sargento', '2º Sgt', 13),
+    ('3º Sargento', '3º Sgt', 14),
+    ('Cabo', 'Cb', 15),
+    ('Soldado de 1ª Classe', 'S1', 16),
+    ('Soldado de 2ª Classe', 'S2', 17),
 ]
 
 # Especialidades típicas da FAB
@@ -117,37 +117,38 @@ DIVISOES_COMAER = [
 
 # Militares por OM (sigla_om → lista)
 MILITARES = {
+    # Tupla: (nome_completo, nome_guerra, cpf, matricula, posto, especialidade, divisao, nasc, data_ultima_promocao)
     'COMAER': [
-        ('Mauro Souza Lima', 'M. LIMA', '11000000001', 'C0001', 'Brig', 'INT', 'EMAER', date(1972, 3, 12)),
-        ('Patrícia Faria Mendes', 'MENDES', '11000000002', 'C0002', 'Cel', 'COM', 'CECOM', date(1978, 11, 5)),
-        ('Ricardo Vieira Alves', 'VIEIRA', '11000000003', 'C0003', 'TC', 'AV', 'EMAER', date(1980, 7, 21)),
-        ('Júlia Albuquerque Nunes', 'JÚLIA', '11000000004', 'C0004', 'Maj', 'INT', 'DIRPES', date(1985, 5, 18)),
+        ('Mauro Souza Lima',       'M. LIMA', '11000000001', 'C0001', 'Brig',  'INT', 'EMAER',  date(1972,  3, 12), date(2010,  3, 1)),
+        ('Patrícia Faria Mendes',  'MENDES',  '11000000002', 'C0002', 'Cel',   'COM', 'CECOM',  date(1978, 11,  5), date(2013, 11, 1)),
+        ('Ricardo Vieira Alves',   'VIEIRA',  '11000000003', 'C0003', 'TC',    'AV',  'EMAER',  date(1980,  7, 21), date(2016,  7, 1)),
+        ('Júlia Albuquerque Nunes','JÚLIA',   '11000000004', 'C0004', 'Maj',   'INT', 'DIRPES', date(1985,  5, 18), date(2019,  5, 1)),
     ],
     'BABR': [
-        ('Carlos Eduardo Silva', 'SILVA', '21000000001', 'B0001', 'Cap', 'AV', 'ESC-AV', date(1985, 3, 12)),
-        ('Marcos Antônio Pereira', 'PEREIRA', '21000000002', 'B0002', '1º Ten', 'AV', 'ESC-AV', date(1990, 7, 21)),
-        ('João Batista Souza', 'SOUZA', '21000000003', 'B0003', '2º Sgt', 'MEC', 'ESC-MN', date(1992, 11, 5)),
-        ('Rafael Almeida Costa', 'COSTA', '21000000004', 'B0004', '3º Sgt', 'LOG', 'SAP', date(1994, 1, 30)),
-        ('Bruno Henrique Lima', 'B. LIMA', '21000000005', 'B0005', 'Cb', 'CTA', 'SUOP', date(1998, 5, 18)),
-        ('André Luiz Martins', 'MARTINS', '21000000006', 'B0006', 'S1', 'SAU', 'SAP', date(2001, 9, 9)),
-        ('Felipe Rodrigues Nunes', 'NUNES', '21000000007', 'B0007', '1º Sgt', 'COM', 'SUOP', date(1988, 4, 25)),
-        ('Diego Oliveira Ramos', 'RAMOS', '21000000008', 'B0008', 'Maj', 'AV', 'ESC-AV', date(1980, 12, 3)),
+        ('Diego Oliveira Ramos',   'RAMOS',   '21000000008', 'B0008', 'Maj',   'AV',  'ESC-AV', date(1980, 12,  3), date(2012,  6, 1)),
+        ('Carlos Eduardo Silva',   'SILVA',   '21000000001', 'B0001', 'Cap',   'AV',  'ESC-AV', date(1985,  3, 12), date(2015,  3, 1)),
+        ('Felipe Rodrigues Nunes', 'NUNES',   '21000000007', 'B0007', '1º Sgt','COM', 'SUOP',   date(1988,  4, 25), date(2016,  4, 1)),
+        ('Marcos Antônio Pereira', 'PEREIRA', '21000000002', 'B0002', '1º Ten','AV',  'ESC-AV', date(1990,  7, 21), date(2018,  7, 1)),
+        ('João Batista Souza',     'SOUZA',   '21000000003', 'B0003', '2º Sgt','MEC', 'ESC-MN', date(1992, 11,  5), date(2019, 11, 1)),
+        ('Rafael Almeida Costa',   'COSTA',   '21000000004', 'B0004', '3º Sgt','LOG', 'SAP',    date(1994,  1, 30), date(2020,  1, 1)),
+        ('Bruno Henrique Lima',    'B. LIMA', '21000000005', 'B0005', 'Cb',    'CTA', 'SUOP',   date(1998,  5, 18), date(2022,  5, 1)),
+        ('André Luiz Martins',     'MARTINS', '21000000006', 'B0006', 'S1',    'SAU', 'SAP',    date(2001,  9,  9), date(2023,  9, 1)),
     ],
     'BAAN': [
-        ('Lucas Ferreira Borges', 'BORGES', '22000000001', 'A0001', 'Cap', 'AV', 'ESC-AV', date(1986, 6, 14)),
-        ('Roberta Caldas Rocha', 'CALDAS', '22000000002', 'A0002', '1º Ten', 'MET', 'SUOP', date(1991, 2, 8)),
-        ('Thiago Mendes Carvalho', 'CARVALHO', '22000000003', 'A0003', '2º Sgt', 'MEC', 'ESC-MN', date(1993, 10, 22)),
-        ('Vinícius Souza Prado', 'PRADO', '22000000004', 'A0004', 'Cb', 'SEG', 'SAP', date(1997, 7, 3)),
-        ('Camila Torres Ferreira', 'TORRES', '22000000005', 'A0005', '3º Sgt', 'CTA', 'SUOP', date(1995, 11, 11)),
-        ('Henrique Santos Gomes', 'GOMES', '22000000006', 'A0006', 'S1', 'INF', 'SAP', date(2002, 4, 19)),
+        ('Lucas Ferreira Borges',  'BORGES',  '22000000001', 'A0001', 'Cap',   'AV',  'ESC-AV', date(1986,  6, 14), date(2016,  6, 1)),
+        ('Roberta Caldas Rocha',   'CALDAS',  '22000000002', 'A0002', '1º Ten','MET', 'SUOP',   date(1991,  2,  8), date(2019,  2, 1)),
+        ('Thiago Mendes Carvalho', 'CARVALHO','22000000003', 'A0003', '2º Sgt','MEC', 'ESC-MN', date(1993, 10, 22), date(2020, 10, 1)),
+        ('Camila Torres Ferreira', 'TORRES',  '22000000005', 'A0005', '3º Sgt','CTA', 'SUOP',   date(1995, 11, 11), date(2021, 11, 1)),
+        ('Vinícius Souza Prado',   'PRADO',   '22000000004', 'A0004', 'Cb',    'SEG', 'SAP',    date(1997,  7,  3), date(2022,  7, 1)),
+        ('Henrique Santos Gomes',  'GOMES',   '22000000006', 'A0006', 'S1',    'INF', 'SAP',    date(2002,  4, 19), date(2024,  4, 1)),
     ],
     'BARF': [
-        ('Eduardo Lima Castro', 'CASTRO', '23000000001', 'R0001', 'TC', 'AV', 'SUOP', date(1979, 9, 1)),
-        ('Mariana Bezerra Lopes', 'LOPES', '23000000002', 'R0002', 'Cap', 'INT', 'SUOP', date(1987, 3, 27)),
-        ('Pedro Henrique Tavares', 'TAVARES', '23000000003', 'R0003', '1º Sgt', 'COM', 'ESC-MN', date(1989, 12, 15)),
-        ('Letícia Araújo Cunha', 'CUNHA', '23000000004', 'R0004', '2º Sgt', 'SAU', 'SAP', date(1993, 8, 5)),
-        ('Gustavo Moreira Pires', 'PIRES', '23000000005', 'R0005', 'Cb', 'MEC', 'ESC-MN', date(1996, 5, 20)),
-        ('Rodrigo Barros Mello', 'MELLO', '23000000006', 'R0006', 'S1', 'LOG', 'SAP', date(2000, 10, 30)),
+        ('Eduardo Lima Castro',    'CASTRO',  '23000000001', 'R0001', 'TC',    'AV',  'SUOP',   date(1979,  9,  1), date(2013,  9, 1)),
+        ('Mariana Bezerra Lopes',  'LOPES',   '23000000002', 'R0002', 'Cap',   'INT', 'SUOP',   date(1987,  3, 27), date(2017,  3, 1)),
+        ('Pedro Henrique Tavares', 'TAVARES', '23000000003', 'R0003', '1º Sgt','COM', 'ESC-MN', date(1989, 12, 15), date(2017, 12, 1)),
+        ('Letícia Araújo Cunha',   'CUNHA',   '23000000004', 'R0004', '2º Sgt','SAU', 'SAP',    date(1993,  8,  5), date(2021,  8, 1)),
+        ('Gustavo Moreira Pires',  'PIRES',   '23000000005', 'R0005', 'Cb',    'MEC', 'ESC-MN', date(1996,  5, 20), date(2022,  5, 1)),
+        ('Rodrigo Barros Mello',   'MELLO',   '23000000006', 'R0006', 'S1',    'LOG', 'SAP',    date(2000, 10, 30), date(2023, 10, 1)),
     ],
 }
 
@@ -270,7 +271,7 @@ class Command(BaseCommand):
                 )
 
             # Militares
-            for (nome_c, ng, cpf, mat, posto_s, esp_s, div_s, nasc) in MILITARES.get(sigla_om, []):
+            for (nome_c, ng, cpf, mat, posto_s, esp_s, div_s, nasc, ult_prom) in MILITARES.get(sigla_om, []):
                 Militar.objects.update_or_create(
                     cpf=cpf,
                     defaults={
@@ -282,6 +283,7 @@ class Command(BaseCommand):
                         'nome_completo': nome_c,
                         'matricula': mat,
                         'data_nascimento': nasc,
+                        'data_ultima_promocao': ult_prom,
                         'ativo': True,
                     },
                 )
